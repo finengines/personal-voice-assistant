@@ -1,0 +1,92 @@
+# Production Docker Compose Override
+# This file contains production-specific configurations
+# Use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  # LiveKit Server - Production Configuration
+  livekit:
+    build:
+      context: ..
+      dockerfile: Dockerfile.livekit
+    environment:
+      - LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+    # Use internal container ports for Dokploy
+    ports:
+      - "7880:7880"  # HTTP
+      - "7881:7881"  # WebRTC over TCP
+    volumes:
+      - ./config/livekit.prod.yaml:/etc/livekit/livekit.yaml:ro
+    deploy:
+      healthcheck:
+        test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:7880/"]
+        interval: 10s
+        timeout: 5s
+        retries: 3
+        start_period: 15s
+    #   - /path/to/ssl/certs:/etc/livekit/certs:ro
+
+  # Backend - Production Configuration
+  backend:
+    depends_on:
+      livekit:
+        condition: service_started
+    environment:
+      - LIVEKIT_URL=wss://assistant-u8y3p8sx.livekit.cloud  # Use external LiveKit server
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - DATABASE_URL=${DATABASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - CARTESIA_API_KEY=${CARTESIA_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    # Uncomment for production deployment
+    # ports:
+    #   - "8082:8082"
+    # volumes:
+    #   - ./backend:/app:ro  # Read-only in production
+
+  # Token Server - Production Configuration
+  token-server:
+    depends_on:
+      livekit:
+        condition: service_started
+    environment:
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - LIVEKIT_URL=wss://assistant-u8y3p8sx.livekit.cloud  # Use external LiveKit server
+      - TOKEN_SERVER_PORT=8081
+      - TOKEN_SERVER_HOST=0.0.0.0
+    # Uncomment for production deployment
+    # ports:
+    #   - "8081:8081"
+
+  # Frontend - Production Configuration
+  frontend:
+    # Uncomment for production deployment
+    # ports:
+    #   - "80:80"
+    #   - "443:443"
+    # volumes:
+    #   - ./frontend:/usr/share/nginx/html:ro
+    #   - /path/to/ssl/certs:/etc/nginx/ssl:ro
+
+  # PostgreSQL - Production Configuration
+  postgres:
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    # Uncomment for production deployment
+    # ports:
+    #   - "5433:5432"  # Only if you need external access
+    # volumes:
+    #   - postgres_data:/var/lib/postgresql/data
+    #   - ./postgres.conf:/etc/postgresql/postgresql.conf:ro
+
+# Production volumes
+volumes:
+  postgres_data:
+    driver: local
+  livekit_data:
+    driver: local 

@@ -1,0 +1,73 @@
+{
+  "servers": {
+    "calendaras": {
+      "id": "calendaras",
+      "name": "Calendar",
+      "description": "Gives access to users calendar",
+      "server_type": "sse",
+      "url": "https://your-n8n-instance.com/mcp/my-calendar/sse",
+      "command": null,
+      "args": null,
+      "env": null,
+      "auth": {
+        "type": "bearer",
+        "token": null,
+        "username": null,
+        "password": null,
+        "header_name": null,
+        "header_value": null
+      },
+      "enabled": true,
+      "timeout": 5.0,
+      "sse_read_timeout": 300.0,
+      "retry_count": 3,
+      "health_check_interval": 60
+    },
+    "gmail": {
+      "id": "gmail",
+      "name": "Email",
+      "description": "Use gmail api to take actions on users email",
+      "server_type": "sse",
+      "url": "https://your-n8n-instance.com/mcp/gmail-enhanced/sse",
+      "command": null,
+      "args": null,
+      "env": null,
+      "auth": {
+        "type": "bearer",
+        "token": null,
+        "username": null,
+        "password": null,
+        "header_name": null,
+        "header_value": null
+      },
+      "enabled": true,
+      "timeout": 5.0,
+      "sse_read_timeout": 300.0,
+      "retry_count": 3,
+      "health_check_interval": 60
+    },
+    "brightdata": {
+      "id": "brightdata",
+      "name": "Brightdata Search",
+      "description": "Use the brightdata search api for a vast amount of internet related tools",
+      "server_type": "openai_tools",
+      "url": "https://your-mcp-server.com/brightdata",
+      "command": null,
+      "args": null,
+      "env": null,
+      "auth": {
+        "type": "bearer",
+        "token": null,
+        "username": null,
+        "password": null,
+        "header_name": null,
+        "header_value": null
+      },
+      "enabled": true,
+      "timeout": 5.0,
+      "sse_read_timeout": 300.0,
+      "retry_count": 3,
+      "health_check_interval": 60
+    }
+  }
+}

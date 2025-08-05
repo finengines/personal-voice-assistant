@@ -1,0 +1,5 @@
+.drawer-overlay{
+ position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;justify-content:flex-end;}
+.drawer-content{background:var(--backgroundColor);width:90%;max-width:480px;height:100%;padding:20px 30px;box-sizing:border-box;position:relative;overflow-y:auto;border-left:1px solid rgba(255,255,255,0.15);} 
+.drawer-close{position:absolute;top:20px;right:20px;background:none;border:none;color:#eae5ec;cursor:pointer;}
+.drawer-inner{margin-top:60px;overflow-y:auto;max-height:calc(100vh-120px);} 

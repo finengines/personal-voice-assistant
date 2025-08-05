@@ -1,0 +1,50 @@
+# LiveKit Server Configuration
+# This file can be customized for your production deployment
+
+# Server configuration
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+
+# API configuration
+keys:
+  devkey: secret
+
+# Redis configuration (optional, for production)
+# redis:
+#   address: redis:6379
+
+# Logging
+log_level: info
+
+# Health check endpoint
+health_port: 7882
+
+# TLS configuration (for production)
+# tls:
+#   cert_file: /path/to/cert.pem
+#   key_file: /path/to/key.pem
+
+# Domain configuration (for production)
+# domain: your-domain.com
+
+# Room configuration
+room:
+  # Maximum number of participants per room
+  max_participants: 10
+  # Room timeout (in seconds)
+  empty_timeout: 300
+  # Maximum room duration (in seconds)
+  max_room_duration: 3600
+
+# Media configuration
+media:
+  # Enable recording
+  recording:
+    enabled: false
+  # Enable transcoding
+  transcoding:
+    enabled: false 

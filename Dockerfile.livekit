@@ -1,0 +1,8 @@
+FROM livekit/livekit-server:latest
+
+# Add curl for health checks - LiveKit's built-in health check requires it
+RUN apk add --no-cache curl
+
+# Override the built-in health check to use the correct endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+    CMD curl -f http://localhost:7880/ || exit 1 

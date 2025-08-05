@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveKit Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; font-family: monospace; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>LiveKit Connection Test</h1>
+    
+    <div>
+        <label>URL: <input type="text" id="url" value="ws://127.0.0.1:7880"></label><br>
+        <label>Token: <input type="text" id="token" style="width: 400px;"></label><br>
+        <button onclick="generateToken()">Generate Token</button>
+        <button onclick="testConnection()">Test Connection</button>
+    </div>
+    
+    <div class="log" id="log">Ready...</div>
+    
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            console.log(message);
+        }
+        
+        async function generateToken() {
+            try {
+                log('Generating token...');
+                const response = await fetch('http://localhost:8081/');
+                const data = await response.json();
+                document.getElementById('token').value = data.token;
+                log(`Token generated for room: ${data.room}`);
+            } catch (error) {
+                log(`Error generating token: ${error.message}`);
+            }
+        }
+        
+        async function testConnection() {
+            const url = document.getElementById('url').value;
+            const token = document.getElementById('token').value;
+            
+            if (!url || !token) {
+                log('Please provide URL and token');
+                return;
+            }
+            
+            try {
+                log('Loading LiveKit client...');
+                
+                // Load LiveKit client
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js';
+                
+                script.onload = async () => {
+                    log('LiveKit client loaded');
+                    
+                    try {
+                        const { Room, RoomEvent } = window.LivekitClient;
+                        log('Creating room...');
+                        
+                        const room = new Room();
+                        
+                        room.on(RoomEvent.Connected, async () => {
+                            log('✅ Connected to LiveKit room!');
+                            
+                            // Enable microphone after connection
+                            try {
+                                log('Enabling microphone...');
+                                await room.localParticipant.setMicrophoneEnabled(true);
+                                log('✅ Microphone enabled and streaming');
+                            } catch (micError) {
+                                log(`❌ Failed to enable microphone: ${micError.message}`);
+                            }
+                        });
+                        
+                        room.on(RoomEvent.Disconnected, (reason) => {
+                            log(`❌ Disconnected: ${reason}`);
+                        });
+                        
+                        room.on(RoomEvent.ParticipantConnected, (participant) => {
+                            log(`👤 Participant connected: ${participant.identity}`);
+                        });
+                        
+                        room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+                            log(`👤 Participant disconnected: ${participant.identity}`);
+                        });
+                        
+                        log('Connecting to room...');
+                        await room.connect(url, token);
+                        
+                        setTimeout(() => {
+                            log('Disconnecting...');
+                            room.disconnect();
+                        }, 5000);
+                        
+                    } catch (error) {
+                        log(`❌ Connection error: ${error.message}`);
+                    }
+                };
+                
+                script.onerror = () => {
+                    log('❌ Failed to load LiveKit client');
+                };
+                
+                document.head.appendChild(script);
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        // Auto-generate token on load
+        generateToken();
+    </script>
+</body>
+</html> 

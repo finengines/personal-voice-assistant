@@ -1,0 +1,179 @@
+# Development Docker Compose Configuration
+# This configuration is for local development with built-in LiveKit server
+# For production deployment, use docker-compose.prod.yml which expects external LiveKit
+
+services:
+  # LiveKit Server - Development Only (Use LiveKit Cloud in production)
+  livekit:
+    build:
+      context: .
+      dockerfile: Dockerfile.livekit
+    container_name: personal_agent_livekit
+    command: ["livekit-server", "--dev"]
+    ports:
+      - "7883:7880"  # Signal server
+      - "7884:7881"  # WebRTC over TCP
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-your_secret_key_at_least_32_characters_long}"
+    volumes:
+      - livekit_data:/tmp
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:7880/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - internal
+
+  # PostgreSQL Database - Development Configuration  
+  postgres:
+    image: postgres:15-alpine
+    container_name: personal_agent_db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-personal_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres} 
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "5433:5432"  # Expose for development access
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/core/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - internal
+
+  # Personal Agent Backend with Authentication - Development Configuration
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: personal_agent_backend
+    environment:
+      # Database Configuration
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-personal_agent}
+      
+      # AI Service API Keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - CARTESIA_API_KEY=${CARTESIA_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - API_KEY_ENCRYPTION_KEY=${API_KEY_ENCRYPTION_KEY}
+      
+      # LiveKit Configuration
+      - LIVEKIT_URL=${LIVEKIT_URL:-ws://livekit:7880}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-your_secret_key_at_least_32_characters_long}
+      
+      # API Ports
+      - MCP_API_PORT=${MCP_API_PORT:-8082}
+      - PRESET_API_PORT=${PRESET_API_PORT:-8083}
+      - GLOBAL_SETTINGS_API_PORT=${GLOBAL_SETTINGS_API_PORT:-8084}
+      - AUTH_API_PORT=${AUTH_API_PORT:-8001}
+      
+      # Security Configuration
+      - JWT_SECRET=${JWT_SECRET}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      
+      # Timezone Configuration
+      - TZ=${TZ:-Europe/London}
+      
+      # Admin Account Credentials (configure via environment variables)
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-change_me_in_production}
+      - ADMIN_NAME=${ADMIN_NAME:-Admin User}
+      
+      # Environment
+      - ENV=${ENV:-development}
+    ports:
+      - "${AUTH_API_PORT:-8001}:8001"
+      - "${MCP_API_PORT:-8082}:8082"
+      - "${PRESET_API_PORT:-8083}:8083"
+      - "${GLOBAL_SETTINGS_API_PORT:-8084}:8084"
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    command: >
+      sh -c "
+        echo 'Launching all services';
+        python start_all.py
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "(curl -f http://localhost:8001/auth/health || curl -f http://localhost:8085/auth/health) && curl -f http://localhost:8082/health && curl -f http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - internal
+
+  # Token Server - Development Configuration
+  token-server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: personal_agent_token_server
+    command: ["python", "utils/simple_token_server.py"]
+    environment:
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-your_secret_key_at_least_32_characters_long}
+      - LIVEKIT_URL=${LIVEKIT_URL:-ws://livekit:7880}
+      - TOKEN_SERVER_PORT=8081
+      - TOKEN_SERVER_HOST=0.0.0.0
+    ports:
+      - "${TOKEN_SERVER_PORT:-8081}:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - internal
+
+  # Personal Agent Frontend - Development Configuration
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: personal_agent_frontend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+      token-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - internal
+
+# Development volumes
+volumes:
+  postgres_data:
+  livekit_data:
+
+# Internal network for service communication
+networks:
+  internal:
+    driver: bridge 

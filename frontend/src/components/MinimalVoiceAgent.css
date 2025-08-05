@@ -1,0 +1,639 @@
+/* Minimal Voice Agent - Clean & Simple */
+.minimal-agent {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  height: calc(100vh - 120px);
+  padding: var(--space-xl) var(--space-lg);
+  overflow: hidden;
+  background: transparent;
+}
+
+/* Header Section */
+.agent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.status-dot.pulsing {
+  animation: pulse 1.5s infinite;
+}
+
+.agent-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  position: relative;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.agent-selector:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.agent-name {
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+.presets-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: var(--color-background-secondary);
+  border-radius: 8px;
+  padding: 0.5rem;
+  z-index: 10;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.preset-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.preset-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.settings-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.settings-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+}
+
+/* Main Interaction Area */
+.main-interaction {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  z-index: var(--z-elevated);
+}
+
+.voice-visualizer {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  flex-grow: 1;
+  gap: 2rem;
+}
+
+/* Connection Container - Simple White Circle */
+.connection-container {
+  position: relative;
+}
+
+.primary-btn {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s ease;
+  background-color: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.primary-btn.connected {
+  border-color: transparent;
+  background-color: #fff;
+}
+
+.primary-btn.disconnected {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.primary-btn.connecting {
+  border-color: var(--color-warning);
+  cursor: not-allowed;
+  background-color: transparent;
+}
+
+.primary-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+.connection-pulse {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: transparent;
+  animation: pulse-ring 1.5s infinite;
+  opacity: 0;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* Status Display */
+.status-display {
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.status-message {
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.connecting-text {
+  font-size: 1.2rem;
+  color: var(--color-text-primary);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.status-detail {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  margin-top: 0.25rem;
+}
+
+.connection-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  animation: fadeIn 0.6s ease-out;
+  opacity: 0.8;
+}
+
+.connection-indicator {
+  color: var(--color-success);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Control Panel */
+.control-panel {
+  width: 100%;
+  max-width: 320px;
+  z-index: var(--z-elevated);
+}
+
+.control-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+.control-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  height: 72px;
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-xl);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.control-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--color-text-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.control-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.control-btn.secondary {
+  color: var(--color-text-secondary);
+}
+
+.control-btn.muted {
+  background: var(--color-error);
+  border-color: var(--color-error);
+  color: white;
+}
+
+.control-btn.unmuted {
+  color: var(--color-success);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.control-btn span {
+  font-size: 0.75rem;
+  font-weight: 400;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
+
+/* Enhanced status indicator */
+.status-dot.pulsing {
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+.ready-indicator {
+  background: var(--color-success);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  margin-left: 8px;
+  font-weight: 500;
+}
+
+/* Enhanced connection button */
+.primary-btn.connecting {
+  background: var(--color-warning);
+  cursor: not-allowed;
+  animation: connectionPulse 2s ease-in-out infinite;
+}
+
+.primary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+@keyframes connectionPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+.connection-loading {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 3px solid transparent;
+  border-top: 3px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.connection-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #ffffff40;
+  border-top: 2px solid #ffffff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.connection-loading-text {
+  color: var(--color-text-primary);
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+/* Connection steps indicator */
+.connection-steps {
+  position: absolute;
+  bottom: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-surface);
+  border-radius: 20px;
+  padding: 8px 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--color-border);
+}
+
+.step-indicator {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.step {
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  transition: all 0.3s ease;
+  min-width: 45px;
+  text-align: center;
+}
+
+.step.completed {
+  background: var(--color-success);
+  color: white;
+  border-color: var(--color-success);
+  transform: scale(1.05);
+}
+
+/* Connection progress */
+.connection-progress {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.progress-bar {
+  width: 200px;
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  margin: 8px auto;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+/* Enhanced controls section */
+.controls-section {
+  padding-bottom: 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 80px;
+}
+
+.voice-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.mute-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mute-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.mute-btn.muted {
+  background-color: var(--color-error);
+  color: white;
+}
+
+/* Audio playing indicator */
+.audio-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--color-primary);
+  color: white;
+  border-radius: 16px;
+  font-size: 0.75rem;
+}
+
+.audio-wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.audio-wave span {
+  width: 3px;
+  height: 12px;
+  background: currentColor;
+  border-radius: 1px;
+  animation: audioWave 1.4s ease-in-out infinite;
+}
+
+.audio-wave span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.audio-wave span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes audioWave {
+  0%, 100% {
+    height: 12px;
+    opacity: 0.6;
+  }
+  50% {
+    height: 20px;
+    opacity: 1;
+  }
+}
+
+/* Setup controls */
+.setup-controls {
+  display: flex;
+  gap: 12px;
+}
+
+/* Error actions */
+.error-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.retry-btn {
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.retry-btn:hover {
+  background: var(--color-primary-dark, #0056b3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .connection-steps {
+    bottom: -40px;
+    padding: 6px 12px;
+  }
+  
+  .step {
+    font-size: 0.7rem;
+    padding: 3px 6px;
+    min-width: 35px;
+  }
+  
+  .step-indicator {
+    gap: 8px;
+  }
+  
+  .progress-bar {
+    width: 150px;
+  }
+  
+  .voice-controls {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* Enhanced memory indicator positioning */
+.memory-indicator {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 10;
+}
+
+/* Connection container improvements */
+.connection-container {
+  position: relative;
+  margin-bottom: 60px; /* Space for connection steps */
+}
+
+/* Ensure the main button stays centered and prominent */
+.primary-btn {
+  position: relative;
+  z-index: 2;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .minimal-agent {
+    padding: var(--space-lg) var(--space-md);
+    height: calc(100vh - 100px);
+  }
+
+  .primary-btn {
+    width: 140px;
+    height: 140px;
+  }
+
+  .connection-pulse {
+    width: 160px;
+    height: 160px;
+  }
+
+  .control-grid {
+    gap: var(--space-sm);
+  }
+
+  .control-btn {
+    height: 64px;
+    font-size: 0.8rem;
+  }
+
+  .status-message {
+    font-size: 1rem;
+  }
+
+  .agent-header {
+    margin-bottom: var(--space-md);
+  }
+}
+
+@media (max-width: 480px) {
+  .primary-btn {
+    width: 120px;
+    height: 120px;
+  }
+
+  .connection-pulse {
+    width: 140px;
+    height: 140px;
+  }
+
+  .control-btn {
+    height: 56px;
+    padding: var(--space-sm);
+  }
+
+  .control-panel {
+    max-width: 280px;
+  }
+} 

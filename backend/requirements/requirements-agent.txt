@@ -1,0 +1,24 @@
+livekit-plugins-openai
+livekit-plugins-deepgram  
+livekit-plugins-silero
+livekit-plugins-cartesia
+livekit-plugins-elevenlabs
+livekit-plugins-groq
+livekit-plugins-anthropic
+livekit-plugins-google
+livekit-plugins-turn-detector
+livekit-plugins-noise-cancellation
+fastapi
+uvicorn
+pydantic[email]>=2.0.0
+pytz
+librosa
+numpy
+cryptography
+# Authentication dependencies
+bcrypt>=4.0.1
+PyJWT>=2.8.0
+pyotp>=2.9.0
+qrcode[pil]>=7.4.2
+python-multipart>=0.0.6
+email-validator>=2.0.0 

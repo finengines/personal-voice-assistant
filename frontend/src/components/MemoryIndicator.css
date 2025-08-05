@@ -1,0 +1,226 @@
+.memory-indicator {
+  position: fixed;
+  top: 2rem;
+  right: 2rem;
+  z-index: 1000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.memory-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 0.75rem 1.25rem;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.memory-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.memory-message {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.memory-pulse {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transform: translateX(-100%);
+  animation: none;
+  pointer-events: none;
+}
+
+/* Memory type variations */
+.memory-created .memory-content {
+  background: linear-gradient(135deg, rgba(72, 187, 120, 0.1), rgba(255, 255, 255, 0.95));
+  border-color: rgba(72, 187, 120, 0.3);
+  box-shadow: 
+    0 8px 32px rgba(72, 187, 120, 0.15),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.memory-created .memory-message {
+  color: #065f46;
+}
+
+.memory-retrieved .memory-content {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(255, 255, 255, 0.95));
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 
+    0 8px 32px rgba(59, 130, 246, 0.15),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.memory-retrieved .memory-message {
+  color: #1e40af;
+}
+
+.memory-searching .memory-content {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(255, 255, 255, 0.95));
+  border-color: rgba(245, 158, 11, 0.3);
+  box-shadow: 
+    0 8px 32px rgba(245, 158, 11, 0.15),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.memory-searching .memory-message {
+  color: #92400e;
+}
+
+/* Animation states */
+.memory-indicator.animate {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  animation: memory-slide-in 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.memory-indicator.animate .memory-pulse {
+  animation: memory-pulse 0.6s ease-out 0.2s;
+}
+
+.memory-indicator.fade-out {
+  opacity: 0;
+  transform: translateY(-0.5rem) scale(0.95);
+}
+
+/* Keyframe animations */
+@keyframes memory-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-1rem) scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0.1rem) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes memory-pulse {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .memory-indicator {
+    top: 1rem;
+    right: 1rem;
+    left: 1rem;
+    width: auto;
+  }
+  
+  .memory-content {
+    padding: 0.6rem 1rem;
+    border-radius: 10px;
+  }
+  
+  .memory-message {
+    font-size: 0.8rem;
+    white-space: normal;
+    max-width: none;
+  }
+  
+  .memory-icon {
+    font-size: 1.1rem;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .memory-content {
+    background: #ffffff;
+    border: 2px solid #000000;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .memory-message {
+    color: #000000;
+    font-weight: 600;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .memory-indicator,
+  .memory-pulse {
+    animation: none !important;
+    transition: opacity 0.2s ease;
+  }
+  
+  .memory-indicator.animate {
+    animation: none;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .memory-content {
+    background: rgba(31, 41, 55, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .memory-message {
+    color: #f3f4f6;
+  }
+  
+  .memory-created .memory-content {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(31, 41, 55, 0.95));
+    border-color: rgba(34, 197, 94, 0.4);
+  }
+  
+  .memory-created .memory-message {
+    color: #a7f3d0;
+  }
+  
+  .memory-retrieved .memory-content {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(31, 41, 55, 0.95));
+    border-color: rgba(59, 130, 246, 0.4);
+  }
+  
+  .memory-retrieved .memory-message {
+    color: #bfdbfe;
+  }
+  
+  .memory-searching .memory-content {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(31, 41, 55, 0.95));
+    border-color: rgba(245, 158, 11, 0.4);
+  }
+  
+  .memory-searching .memory-message {
+    color: #fde68a;
+  }
+} 
