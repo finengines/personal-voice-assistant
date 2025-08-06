@@ -1878,14 +1878,17 @@ async def entrypoint(ctx: JobContext):
     # ---------------------------------------------------------------------
     speed = preset.agent_config.speed_config or SpeedConfig()
 
-    # Choose turn-detection implementation with proper fallbacks
-    try:
-        turn_detection_impl = (
-            MultilingualModel() if (speed.advanced_turn_detection and MULTILINGUAL_AVAILABLE and MultilingualModel) else "vad"
-        )
-    except Exception as e:
-        logger.warning(f"Turn detection model failed to load: {e}, falling back to VAD")
-        turn_detection_impl = "vad"
+    # Choose turn-detection implementation with proper fallbacks  
+    # Temporarily force VAD to avoid turn detector model issues
+    turn_detection_impl = "vad"
+    logger.info("🔧 Using VAD turn detection (multilingual model temporarily disabled)")
+    # try:
+    #     turn_detection_impl = (
+    #         MultilingualModel() if (speed.advanced_turn_detection and MULTILINGUAL_AVAILABLE and MultilingualModel) else "vad"
+    #     )
+    # except Exception as e:
+    #     logger.warning(f"Turn detection model failed to load: {e}, falling back to VAD")
+    #     turn_detection_impl = "vad"
 
     # ---------------------------------------------------------------------
     # 5. Create the LiveKit AgentSession with optimized settings
