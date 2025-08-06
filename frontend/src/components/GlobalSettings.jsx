@@ -12,6 +12,8 @@ const GlobalSettings = () => {
   const [success, setSuccess] = useState(null);
   const [previewAgentPrompt, setPreviewAgentPrompt] = useState('');
   const [previewResult, setPreviewResult] = useState(null);
+  const [memoryStatus, setMemoryStatus] = useState(null);
+  const [memoryLoading, setMemoryLoading] = useState(false);
 
   // Dynamic API base URL configuration
   const getApiBase = async () => {
@@ -19,8 +21,14 @@ const GlobalSettings = () => {
     return config.API_BASE_GLOBAL_SETTINGS;
   };
 
+  const getMcpApiBase = async () => {
+    const { default: config } = await import('../config.js');
+    return config.API_BASE_MCP;
+  };
+
   useEffect(() => {
     loadSettings();
+    checkMemoryStatus();
   }, []);
 
   const loadSettings = async () => {
@@ -123,6 +131,25 @@ const GlobalSettings = () => {
     }
   };
 
+  const checkMemoryStatus = async () => {
+    try {
+      setMemoryLoading(true);
+      const MCP_API_BASE = await getMcpApiBase();
+      const response = await fetch(`${MCP_API_BASE}/memory-status`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setMemoryStatus(data.data);
+      } else {
+        setMemoryStatus({ overall_status: 'error', error: data.message });
+      }
+    } catch (err) {
+      setMemoryStatus({ overall_status: 'error', error: err.message });
+    } finally {
+      setMemoryLoading(false);
+    }
+  };
+
   const handleInputChange = (field, value) => {
     setSettings(prev => ({ ...prev, [field]: value }));
   };
@@ -197,6 +224,67 @@ const GlobalSettings = () => {
             className="save-button"
           >
             {saving ? 'Saving...' : 'Save Settings'}
+          </button>
+        </div>
+      </div>
+
+      <div className="memory-status-section">
+        <h3>Memory System Status</h3>
+        <p className="status-description">
+          Monitor the connectivity and health of the agent's memory systems
+        </p>
+        
+        {memoryLoading ? (
+          <div className="status-loading">Checking memory status...</div>
+        ) : memoryStatus ? (
+          <div className="status-grid">
+            <div className={`status-card overall-status ${memoryStatus.overall_status}`}>
+              <h4>Overall Status</h4>
+              <div className="status-indicator">
+                {memoryStatus.overall_status === 'healthy' && <span className="status-icon">✅</span>}
+                {memoryStatus.overall_status === 'degraded' && <span className="status-icon">⚠️</span>}
+                {(memoryStatus.overall_status === 'error' || memoryStatus.overall_status === 'no_servers') && <span className="status-icon">❌</span>}
+                <span className="status-text">{memoryStatus.overall_status}</span>
+              </div>
+            </div>
+            
+            <div className={`status-card ${memoryStatus.graphiti_api?.status === 'connected' ? 'healthy' : 'error'}`}>
+              <h4>Graphiti API</h4>
+              <div className="status-indicator">
+                {memoryStatus.graphiti_api?.status === 'connected' ? '✅' : '❌'}
+                <span className="status-text">{memoryStatus.graphiti_api?.status || 'unknown'}</span>
+              </div>
+              <div className="status-detail">{memoryStatus.graphiti_api?.url}</div>
+            </div>
+            
+            <div className={`status-card ${memoryStatus.graphiti_mcp?.status === 'connected' ? 'healthy' : 'error'}`}>
+              <h4>Graphiti MCP</h4>
+              <div className="status-indicator">
+                {memoryStatus.graphiti_mcp?.status === 'connected' ? '✅' : '❌'}
+                <span className="status-text">{memoryStatus.graphiti_mcp?.status || 'unknown'}</span>
+              </div>
+              <div className="status-detail">{memoryStatus.graphiti_mcp?.url}</div>
+            </div>
+            
+            <div className="status-card">
+              <h4>MCP Servers</h4>
+              <div className="status-indicator">
+                <span className="status-text">{memoryStatus.servers?.length || 0} active</span>
+              </div>
+              <div className="status-detail">{memoryStatus.tools_count || 0} tools available</div>
+            </div>
+          </div>
+        ) : (
+          <div className="status-error">Failed to load memory status</div>
+        )}
+        
+        <div className="status-actions">
+          <button
+            onClick={checkMemoryStatus}
+            disabled={memoryLoading}
+            className="refresh-button"
+          >
+            {memoryLoading ? 'Checking...' : 'Refresh Status'}
           </button>
         </div>
       </div>

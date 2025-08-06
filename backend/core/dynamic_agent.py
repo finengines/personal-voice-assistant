@@ -601,6 +601,70 @@ Just ask me naturally and I'll use the right tool to help you! For example:
         """Get information about the current agent preset and capabilities"""
         return f"I am currently configured as '{self.preset_name}': {self.preset.description}. I have access to {len(self.preset.mcp_server_ids)} specialized tools and services."
 
+    @function_tool
+    async def check_memory_status(self) -> str:
+        """Check the status of memory systems and tools available to the agent"""
+        logger.info("🔍 Checking memory system status")
+        
+        status_parts = []
+        
+        # Check Graphiti REST API connectivity
+        try:
+            resp = requests.get(f"{self.GRAPHITI_API_URL}/health", timeout=3)
+            if resp.ok:
+                status_parts.append("✅ Graphiti REST API: Connected")
+                self.memory_api_available = True
+            else:
+                status_parts.append(f"❌ Graphiti REST API: Error {resp.status_code}")
+                self.memory_api_available = False
+        except Exception as e:
+            status_parts.append(f"❌ Graphiti REST API: Connection failed - {e}")
+            self.memory_api_available = False
+        
+        # Check MCP tools available through session
+        mcp_tools_count = 0
+        if hasattr(self, 'session') and self.session and hasattr(self.session, 'mcp_servers'):
+            mcp_servers = getattr(self.session, 'mcp_servers', [])
+            if mcp_servers:
+                status_parts.append(f"✅ MCP Servers: {len(mcp_servers)} connected")
+                for i, server in enumerate(mcp_servers):
+                    server_info = f"  - Server {i+1}: {type(server).__name__}"
+                    if hasattr(server, 'url'):
+                        server_info += f" ({server.url})"
+                    status_parts.append(server_info)
+                    
+                    # Try to count tools
+                    try:
+                        if hasattr(server, 'list_tools'):
+                            tools = await server.list_tools()
+                            mcp_tools_count += len(tools) if tools else 0
+                            status_parts.append(f"    Tools: {len(tools) if tools else 0}")
+                    except Exception as e:
+                        status_parts.append(f"    Tools: Error listing - {e}")
+            else:
+                status_parts.append("❌ MCP Servers: None connected")
+        else:
+            status_parts.append("❌ MCP Servers: Session not available")
+        
+        # Check memory statistics
+        stats = self.get_memory_stats()
+        status_parts.append(f"\n📊 Memory Statistics:")
+        status_parts.append(f"  - Memories retrieved: {stats['memories_retrieved']}")
+        status_parts.append(f"  - Memories stored: {stats['memories_stored']}")
+        status_parts.append(f"  - Local session memories: {len(self.local_memory)}")
+        status_parts.append(f"  - Conversation turns: {self.conversation_turns}")
+        
+        # Configuration info
+        status_parts.append(f"\n🔧 Configuration:")
+        status_parts.append(f"  - Graphiti MCP URL: {self.GRAPHITI_MCP_URL}")
+        status_parts.append(f"  - Graphiti API URL: {self.GRAPHITI_API_URL}")
+        status_parts.append(f"  - Preset MCP servers: {self.preset.mcp_server_ids}")
+        status_parts.append(f"  - Total MCP tools detected: {mcp_tools_count}")
+        
+        result = "\n".join(status_parts)
+        logger.info(f"Memory status check result:\n{result}")
+        return result
+
     # =============================================================================
     # MEMORY SYSTEM METHODS (Enhanced from GraphitiAgent)
     # =============================================================================
@@ -1496,8 +1560,20 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
         )
         mcp_servers.append(graphiti_server)
         logger.info(f"✅ Added default Graphiti MCP server: {GRAPHITI_MCP_URL}")
+        
+        # Test connectivity
+        try:
+            # This will attempt to connect and list tools
+            tools = await graphiti_server.list_tools()
+            logger.info(f"🔧 Graphiti MCP server has {len(tools) if tools else 0} tools available")
+            if tools:
+                for tool in tools[:3]:  # Log first 3 tools
+                    tool_name = getattr(tool, 'name', str(tool))
+                    logger.info(f"  - Tool: {tool_name}")
+        except Exception as test_e:
+            logger.warning(f"⚠️ Graphiti MCP server added but connection test failed: {test_e}")
     except Exception as e:
-        logger.warning(f"⚠️ Failed to add default Graphiti MCP server: {e}")
+        logger.error(f"❌ Failed to add default Graphiti MCP server: {e}", exc_info=True)
     
     if not mcp_server_ids:
         logger.info("ℹ️ No additional MCP servers specified in preset")
@@ -1760,11 +1836,17 @@ async def entrypoint(ctx: JobContext):
 
     # Handle tools_disabled case
     if tools_disabled:
+        logger.warning("🔧 Tools disabled for this model - clearing MCP servers")
         mcp_servers = []
     elif mcp_servers:
         logger.info("✅ Loaded %s MCP server(s) for preset", len(mcp_servers))
+        for i, server in enumerate(mcp_servers):
+            server_info = f"  - MCP Server {i+1}: {type(server).__name__}"
+            if hasattr(server, 'url'):
+                server_info += f" ({server.url})"
+            logger.info(server_info)
     else:
-        logger.info("ℹ️ No MCP servers configured – using built-in function tools only")
+        logger.warning("⚠️ No MCP servers configured – agent will only have built-in function tools")
 
     # ---------------------------------------------------------------------
     # 4. Configure session options efficiently

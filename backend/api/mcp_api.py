@@ -608,6 +608,88 @@ async def health_check():
             }
         )
 
+@app.get("/memory-status", response_model=APIResponse)
+async def memory_status():
+    """Check memory system connectivity and status"""
+    try:
+        import requests
+        
+        status_data = {
+            "graphiti_api": {"status": "unknown", "url": ""},
+            "graphiti_mcp": {"status": "unknown", "url": ""},
+            "servers": [],
+            "tools_count": 0
+        }
+        
+        # Check Graphiti API
+        graphiti_api_url = os.getenv("GRAPHITI_API_URL", "https://your-graphiti-instance.com")
+        status_data["graphiti_api"]["url"] = graphiti_api_url
+        try:
+            resp = requests.get(f"{graphiti_api_url}/health", timeout=3)
+            if resp.ok:
+                status_data["graphiti_api"]["status"] = "connected"
+            else:
+                status_data["graphiti_api"]["status"] = f"error_{resp.status_code}"
+        except Exception as e:
+            status_data["graphiti_api"]["status"] = f"failed_{str(e)[:50]}"
+        
+        # Check Graphiti MCP
+        graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
+        status_data["graphiti_mcp"]["url"] = graphiti_mcp_url
+        try:
+            resp = requests.get(graphiti_mcp_url.replace('/sse', '/health'), timeout=3)
+            if resp.ok:
+                status_data["graphiti_mcp"]["status"] = "connected"
+            else:
+                status_data["graphiti_mcp"]["status"] = f"error_{resp.status_code}"
+        except Exception as e:
+            status_data["graphiti_mcp"]["status"] = f"failed_{str(e)[:50]}"
+        
+        # Check MCP servers
+        manager = get_mcp_manager()
+        if hasattr(manager, 'active_servers'):
+            for server_id, server in manager.active_servers.items():
+                server_info = {
+                    "id": server_id,
+                    "type": type(server).__name__,
+                    "url": getattr(server, 'url', 'N/A'),
+                    "status": "active"
+                }
+                status_data["servers"].append(server_info)
+                
+                # Try to count tools
+                try:
+                    if hasattr(server, 'list_tools'):
+                        tools = await server.list_tools()
+                        status_data["tools_count"] += len(tools) if tools else 0
+                        server_info["tools_count"] = len(tools) if tools else 0
+                except:
+                    server_info["tools_count"] = "unknown"
+        
+        overall_status = "healthy"
+        if status_data["graphiti_api"]["status"] != "connected":
+            overall_status = "degraded"
+        if status_data["graphiti_mcp"]["status"] != "connected":
+            overall_status = "degraded"
+        if not status_data["servers"]:
+            overall_status = "no_servers"
+        
+        return APIResponse(
+            success=True,
+            message=f"Memory system status: {overall_status}",
+            data={
+                "overall_status": overall_status,
+                **status_data
+            }
+        )
+        
+    except Exception as e:
+        return APIResponse(
+            success=False,
+            message="Failed to check memory status",
+            data={"error": str(e)}
+        )
+
 # Development server
 def main():
     """Run the MCP API server"""

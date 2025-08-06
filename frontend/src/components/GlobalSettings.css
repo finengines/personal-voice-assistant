@@ -273,6 +273,131 @@
   font-size: 1.1rem;
 }
 
+/* Memory Status Styles */
+.memory-status-section {
+  background: #2a2a2a;
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  border: 1px solid #404040;
+}
+
+.memory-status-section h3 {
+  font-size: 1.5rem;
+  font-weight: 400;
+  margin-bottom: 0.5rem;
+  color: #ffffff;
+}
+
+.status-description {
+  color: #b0b0b0;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+.status-loading {
+  text-align: center;
+  padding: 2rem;
+  color: #b0b0b0;
+}
+
+.status-error {
+  text-align: center;
+  padding: 2rem;
+  color: #e0b0b0;
+  background: #2a1a1a;
+  border: 1px solid #4a2a2a;
+  border-radius: 8px;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.status-card {
+  background: #1a1a1a;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  padding: 1rem;
+  transition: all 0.2s ease;
+}
+
+.status-card.healthy {
+  border-color: #2a4a2a;
+  background: #1a2a1a;
+}
+
+.status-card.error {
+  border-color: #4a2a2a;
+  background: #2a1a1a;
+}
+
+.status-card.degraded {
+  border-color: #4a4a2a;
+  background: #2a2a1a;
+}
+
+.status-card h4 {
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.status-icon {
+  margin-right: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.status-text {
+  font-weight: 500;
+  color: #e0e0e0;
+  text-transform: capitalize;
+}
+
+.status-detail {
+  font-size: 0.8rem;
+  color: #888;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  word-break: break-all;
+}
+
+.status-actions {
+  text-align: center;
+}
+
+.refresh-button {
+  background: #404040;
+  color: #e0e0e0;
+  border: 1px solid #555;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: #505050;
+  border-color: #666;
+}
+
+.refresh-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .global-settings {
@@ -280,7 +405,8 @@
   }
   
   .settings-section,
-  .preview-section {
+  .preview-section,
+  .memory-status-section {
     padding: 1.5rem;
   }
   
@@ -288,7 +414,12 @@
     font-size: 1.5rem;
   }
   
-  .preview-section h3 {
+  .preview-section h3,
+  .memory-status-section h3 {
     font-size: 1.25rem;
+  }
+  
+  .status-grid {
+    grid-template-columns: 1fr;
   }
 } 
