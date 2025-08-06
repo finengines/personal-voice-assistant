@@ -637,7 +637,7 @@ async def memory_status():
         graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
         status_data["graphiti_mcp"]["url"] = graphiti_mcp_url
         try:
-            resp = requests.get(graphiti_mcp_url.replace('/sse', '/health'), timeout=3)
+            resp = requests.get(graphiti_mcp_url.replace('/sse', '/healthcheck'), timeout=3)
             if resp.ok:
                 status_data["graphiti_mcp"]["status"] = "connected"
             else:
