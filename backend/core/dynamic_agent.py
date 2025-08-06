@@ -336,11 +336,25 @@ Memory System Guidelines:
         try:
             if hasattr(self, 'session') and hasattr(self.session, 'mcp_servers') and self.session.mcp_servers:
                 self.memory_api_available = True
-                logger.info("✅ Memory system initialized with MCP servers")
+                logger.info(f"✅ Memory system initialized with {len(self.session.mcp_servers)} MCP servers")
+                for i, server in enumerate(self.session.mcp_servers):
+                    logger.info(f"  - MCP Server {i+1}: {type(server).__name__} ({getattr(server, 'url', 'N/A')})")
+                    try:
+                        tools = await server.list_tools()
+                        logger.info(f"    Available tools: {len(tools) if tools else 0}")
+                        if tools:
+                            for tool in tools[:3]:  # Log first 3 tools
+                                tool_name = getattr(tool, 'name', str(tool))
+                                logger.info(f"      - {tool_name}")
+                    except Exception as e:
+                        logger.warning(f"    Failed to list tools: {e}")
             else:
-                logger.info("ℹ️ Using REST API for memory operations")
-        except RuntimeError:
-            logger.debug("Session not available yet, will use REST API for memory operations")
+                logger.info("ℹ️ Using REST API for memory operations (no MCP servers found)")
+                logger.info(f"🔍 Session available: {hasattr(self, 'session')}")
+                if hasattr(self, 'session'):
+                    logger.info(f"🔍 Session MCP servers: {getattr(self.session, 'mcp_servers', 'Not found')}")
+        except RuntimeError as e:
+            logger.debug(f"Session not available yet, will use REST API for memory operations: {e}")
 
     @function_tool
     async def get_current_time(self, location: str = "local", timezone_name: str = "") -> str:
@@ -1149,7 +1163,9 @@ Just ask me naturally and I'll use the right tool to help you! For example:
                 logger.error(f"Error processing fast response: {e}")
 
         # Always attempt to retrieve relevant memories for context
+        logger.info(f"🧠 About to retrieve memories for: '{user_input[:50]}...'")
         relevant_memories = await self.retrieve_contextual_memory(user_input)
+        logger.info(f"🧠 Retrieved {len(relevant_memories)} memories: {relevant_memories[:2] if relevant_memories else 'None'}")
         
         # Build enhanced system prompt with memory context
         # Use enhanced instructions if available, otherwise fall back to original
@@ -1568,6 +1584,7 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
         )
         mcp_servers.append(graphiti_server)
         logger.info(f"✅ Added default Graphiti MCP server: {GRAPHITI_MCP_URL}")
+        logger.info(f"📊 Total MCP servers after Graphiti addition: {len(mcp_servers)}")
         
         # Test connectivity
         try:
