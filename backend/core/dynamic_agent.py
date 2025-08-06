@@ -274,7 +274,8 @@ Memory System Guidelines:
         try:
             payload = {
                 "query": query,
-                "max_facts": max_facts
+                "max_facts": max_facts,
+                "group_ids": ["global"]
             }
             
             resp = requests.post(
@@ -798,12 +799,18 @@ Just ask me naturally and I'll use the right tool to help you! For example:
             episode_name = name or f"Voice Memory {datetime.utcnow().isoformat()}"
             
             payload = {
-                "name": episode_name,
-                "episode_body": episode_body,
-                "source": "message",
-                "source_description": "Voice agent conversation"
+                "group_id": "global",
+                "messages": [
+                    {
+                        "content": episode_body,
+                        "role_type": "assistant",
+                        "role": "assistant",
+                        "name": episode_name,
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                ]
             }
-            resp = requests.post(f"{self.GRAPHITI_API_URL}/add_memory", json=payload, timeout=3)
+            resp = requests.post(f"{self.GRAPHITI_API_URL}/messages", json=payload, timeout=3)
             if resp.ok:
                 logger.info(f"[Graphiti] Stored memory via REST: {episode_name}")
                 self.memory_stats['memories_stored'] += 1
