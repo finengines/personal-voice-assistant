@@ -1,0 +1,73 @@
+{
+  "servers": {
+    "example-calendar": {
+      "id": "example-calendar",
+      "name": "Calendar",
+      "description": "Gives access to users calendar",
+      "server_type": "sse",
+      "url": "https://your-n8n-instance.com/mcp/my-calendar/sse",
+      "command": null,
+      "args": null,
+      "env": null,
+      "auth": {
+        "type": "bearer",
+        "token": "your_auth_token_here",
+        "username": null,
+        "password": null,
+        "header_name": null,
+        "header_value": null
+      },
+      "enabled": false,
+      "timeout": 5.0,
+      "sse_read_timeout": 300.0,
+      "retry_count": 3,
+      "health_check_interval": 60
+    },
+    "example-email": {
+      "id": "example-email",
+      "name": "Email",
+      "description": "Use gmail api to take actions on users email",
+      "server_type": "sse",
+      "url": "https://your-n8n-instance.com/mcp/gmail-enhanced/sse",
+      "command": null,
+      "args": null,
+      "env": null,
+      "auth": {
+        "type": "bearer",
+        "token": "your_auth_token_here",
+        "username": null,
+        "password": null,
+        "header_name": null,
+        "header_value": null
+      },
+      "enabled": false,
+      "timeout": 5.0,
+      "sse_read_timeout": 300.0,
+      "retry_count": 3,
+      "health_check_interval": 60
+    },
+    "example-search": {
+      "id": "example-search",
+      "name": "Web Search",
+      "description": "Use web search API for internet-related tools",
+      "server_type": "openai_tools",
+      "url": "https://your-search-api.com/tools",
+      "command": null,
+      "args": null,
+      "env": null,
+      "auth": {
+        "type": "bearer",
+        "token": "your_search_api_token_here",
+        "username": null,
+        "password": null,
+        "header_name": null,
+        "header_value": null
+      },
+      "enabled": false,
+      "timeout": 5.0,
+      "sse_read_timeout": 300.0,
+      "retry_count": 3,
+      "health_check_interval": 60
+    }
+  }
+}

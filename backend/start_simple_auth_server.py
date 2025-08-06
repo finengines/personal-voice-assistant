@@ -83,6 +83,6 @@ if __name__ == "__main__":
         app,
         host=host,
         port=port,
-        reload=os.getenv("ENV") != "production",
+        reload=False,  # Disable reload in container environment
         log_level="info"
     )

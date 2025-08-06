@@ -15,6 +15,7 @@ CONSOLIDATED FUNCTIONALITY:
 import logging
 import asyncio
 import json
+import os
 import re
 import time
 import requests
@@ -84,8 +85,8 @@ class DynamicAgent(Agent):
     """Agent that configures itself based on a preset and includes built-in tools with enhanced memory capabilities"""
     
     # Graphiti API configuration
-    GRAPHITI_MCP_URL = "https://your-graphiti-instance.com/sse"
-    GRAPHITI_API_URL = "https://your-graphiti-instance.com"
+    GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
+    GRAPHITI_API_URL = os.getenv("GRAPHITI_API_URL", "https://your-graphiti-instance.com")
     
     def __init__(self, preset: AgentPresetConfig) -> None:
         # Store preset for async initialization
@@ -1485,7 +1486,7 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
     mcp_servers = []
     
     # Always add Graphiti MCP server for memory functionality
-    GRAPHITI_MCP_URL = "https://your-graphiti-instance.com/sse"
+    GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
     try:
         logger.info(f"🔌 Adding default Graphiti MCP server: {GRAPHITI_MCP_URL}")
         graphiti_server = mcp.MCPServerHTTP(
