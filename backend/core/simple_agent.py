@@ -121,7 +121,7 @@ async def entrypoint(ctx: JobContext):
     
     # Create the agent using the preset configuration
     from core.dynamic_agent import DynamicAgent
-    agent = DynamicAgent(preset, ctx_room=ctx.room)
+    agent = DynamicAgent(preset)
 
     # CRITICAL: Connect to the room context BEFORE starting the session
     logger.info("🔌 Connecting to room context...")
