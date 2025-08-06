@@ -610,7 +610,7 @@ Just ask me naturally and I'll use the right tool to help you! For example:
         
         # Check Graphiti REST API connectivity
         try:
-            resp = requests.get(f"{self.GRAPHITI_API_URL}/health", timeout=3)
+            resp = requests.get(f"{self.GRAPHITI_API_URL}/healthcheck", timeout=3)
             if resp.ok:
                 status_parts.append("✅ Graphiti REST API: Connected")
                 self.memory_api_available = True
@@ -802,7 +802,7 @@ Just ask me naturally and I'll use the right tool to help you! For example:
                 "source": "message",
                 "source_description": "Voice agent conversation"
             }
-            resp = requests.post(f"{self.GRAPHITI_API_URL}/add_memory", json=payload, timeout=3)
+            resp = requests.post(f"{self.GRAPHITI_API_URL}/episodes", json=payload, timeout=3)
             if resp.ok:
                 logger.info(f"[Graphiti] Stored memory via REST: {episode_name}")
                 self.memory_stats['memories_stored'] += 1

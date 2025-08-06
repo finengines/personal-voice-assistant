@@ -625,7 +625,7 @@ async def memory_status():
         graphiti_api_url = os.getenv("GRAPHITI_API_URL", "https://your-graphiti-instance.com")
         status_data["graphiti_api"]["url"] = graphiti_api_url
         try:
-            resp = requests.get(f"{graphiti_api_url}/health", timeout=3)
+            resp = requests.get(f"{graphiti_api_url}/healthcheck", timeout=3)
             if resp.ok:
                 status_data["graphiti_api"]["status"] = "connected"
             else:
