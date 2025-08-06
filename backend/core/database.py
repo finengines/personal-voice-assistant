@@ -169,8 +169,17 @@ except ImportError as e:
 # Database initialization
 async def init_db():
     """Initialize database tables"""
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        # Handle duplicate table/type errors gracefully
+        error_msg = str(e).lower()
+        if 'already exists' in error_msg or 'duplicate key' in error_msg:
+            print(f"ℹ️ Database objects already exist (this is normal during concurrent startup): {e}")
+        else:
+            print(f"❌ Database initialization error: {e}")
+            raise
 
 async def drop_db():
     """Drop all database tables (use with caution)"""

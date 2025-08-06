@@ -1,5 +1,21 @@
 {
   "servers": {
+    "graphiti-memory": {
+      "id": "graphiti-memory",
+      "name": "Graphiti Memory",
+      "description": "Graphiti knowledge base and memory system for persistent agent memory",
+      "server_type": "sse",
+      "url": "${GRAPHITI_MCP_URL}",
+      "command": null,
+      "args": null,
+      "env": null,
+      "auth": null,
+      "enabled": true,
+      "timeout": 10.0,
+      "sse_read_timeout": 60.0,
+      "retry_count": 3,
+      "health_check_interval": 60
+    },
     "example-calendar": {
       "id": "example-calendar",
       "name": "Calendar",

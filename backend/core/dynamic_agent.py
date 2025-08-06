@@ -1572,6 +1572,12 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                     logger.warning(f"⚠️ No URL for server '{server_id}', skipping")
                     continue
                 
+                # Substitute environment variables in URL
+                if url.startswith('${') and url.endswith('}'):
+                    env_var = url[2:-1]  # Remove ${ and }
+                    url = os.getenv(env_var, url)
+                    logger.info(f"🔧 Substituted environment variable {env_var} in URL for server '{server_id}': {url}")
+                
                 try:
                     # Build headers for authentication
                     headers = {}
