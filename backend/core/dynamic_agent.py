@@ -88,11 +88,12 @@ class DynamicAgent(Agent):
     GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
     GRAPHITI_API_URL = os.getenv("GRAPHITI_API_URL", "https://your-graphiti-instance.com")
     
-    def __init__(self, preset: AgentPresetConfig) -> None:
+    def __init__(self, preset: AgentPresetConfig, ctx_room=None) -> None:
         # Store preset for async initialization
         self.preset = preset
         self.preset_id = preset.id
         self.preset_name = preset.name
+        self.ctx_room = ctx_room
         
         # Initialize with basic prompt, will be enhanced in on_enter
         super().__init__(
