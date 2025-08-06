@@ -28,7 +28,7 @@ const config = {
     : '/api/token/',  // Use relative path for internal container access
     
   API_BASE_AUTH: isLocalhost 
-    ? 'http://localhost:8001' 
+    ? 'http://localhost:8001/auth' 
     : window.location.origin + '/api/auth',  // Use full URL for production routing
     
   // Environment information
