@@ -1799,17 +1799,24 @@ async def get_preset_for_room(ctx: JobContext) -> AgentPresetConfig:
 
 
 async def entrypoint(ctx: JobContext):
-    """Worker entrypoint that dynamically builds the agent session from the active preset."""
-
+    """MINIMAL TEST ENTRYPOINT"""
+    logging.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    logging.critical("!!!!!!!!!! MINIMAL ENTRYPOINT CALLED !!!!!!!!!!")
+    logging.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     # Attach room info to all structured logs
     ctx.log_context_fields = {"room": ctx.room.name}
 
-    # ---------------------------------------------------------------------
-    # 1. Load preset configuration (fast operation)
-    # ---------------------------------------------------------------------
-    logger.info("🔄 Loading preset configuration for room '%s'…", ctx.room.name)
-    preset = await get_preset_for_room(ctx)
-    logger.info("✅ Using preset '%s'", preset.name)
+    # Your original entrypoint code is temporarily commented out below
+    # You can uncomment it once you've verified that this minimal entrypoint is being called.
+    # (The original code is preserved for now)
+    
+    # # ---------------------------------------------------------------------
+    # # 1. Load preset configuration (fast operation)
+    # # ---------------------------------------------------------------------
+    # logger.info("🔄 Loading preset configuration for room '%s'…", ctx.room.name)
+    # preset = await get_preset_for_room(ctx)
+    # logger.info("✅ Using preset '%s'", preset.name)
+    # (and so on...)
 
     # ---------------------------------------------------------------------
     # 2. Check model compatibility (with caching to reduce startup time)
@@ -1964,7 +1971,7 @@ async def entrypoint(ctx: JobContext):
     # ---------------------------------------------------------------------
     # 7. Start the agent with optimized settings
     # ---------------------------------------------------------------------
-    agent = DynamicAgent(preset)
+    agent = DynamicAgent(preset, ctx_room=ctx.room)
     # NOTE: Do NOT manually set the `session` attribute; it is a read-only
     # property provided by the LiveKit `Agent` base class once the agent is
     # started via `session.start()`. Attempting to override it raises an
