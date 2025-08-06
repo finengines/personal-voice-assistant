@@ -70,6 +70,10 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ADMIN_NAME=${ADMIN_NAME}
       
+      # Memory and Knowledge Services (Optional)
+      - GRAPHITI_MCP_URL=${GRAPHITI_MCP_URL:-https://your-graphiti-instance.com/sse}
+      - GRAPHITI_API_URL=${GRAPHITI_API_URL:-https://your-graphiti-instance.com}
+      
       # Environment
       - ENV=production
     depends_on:
