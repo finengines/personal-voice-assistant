@@ -60,13 +60,16 @@ try:
 except ImportError:
     noise_cancellation = None
 
-# Conditional import for turn detection
-try:
-    from livekit.plugins.turn_detector.multilingual import MultilingualModel
-    MULTILINGUAL_AVAILABLE = True
-except ImportError:
-    MULTILINGUAL_AVAILABLE = False
-    MultilingualModel = None
+# Disable multilingual turn detector to avoid model loading issues
+MULTILINGUAL_AVAILABLE = False
+MultilingualModel = None
+# # Conditional import for turn detection
+# try:
+#     from livekit.plugins.turn_detector.multilingual import MultilingualModel
+#     MULTILINGUAL_AVAILABLE = True
+# except ImportError:
+#     MULTILINGUAL_AVAILABLE = False
+#     MultilingualModel = None
 
 from api.preset_manager import preset_manager
 from agent_config import AgentPresetConfig, VoiceConfig, LLMConfig, STTConfig, AgentConfig, SpeedConfig
@@ -2064,13 +2067,13 @@ if __name__ == "__main__":
             silero.VAD.load()
             logger.info("✅ VAD model downloaded")
             
-            # Download turn detection models if available
-            if MULTILINGUAL_AVAILABLE:
-                try:
-                    MultilingualModel()._download()
-                    logger.info("✅ Turn detection models downloaded")
-                except Exception as e:
-                    logger.warning(f"Turn detection model download failed: {e}")
+            # Download turn detection models if available (disabled for now)
+            # if MULTILINGUAL_AVAILABLE:
+            #     try:
+            #         MultilingualModel()._download()
+            #         logger.info("✅ Turn detection models downloaded")
+            #     except Exception as e:
+            #         logger.warning(f"Turn detection model download failed: {e}")
             
             logger.info("✅ Model download complete")
         except Exception as e:
