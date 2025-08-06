@@ -14,7 +14,7 @@ RUN npm ci
 COPY . .
 
 # Build the application
-RUN npm run build
+RUN npm run build --cache=false
 
 # ============================================================================
 # Production stage - optimized nginx serving
