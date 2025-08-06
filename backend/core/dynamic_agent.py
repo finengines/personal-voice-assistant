@@ -278,7 +278,7 @@ Memory System Guidelines:
             }
             
             resp = requests.post(
-                f"{self.GRAPHITI_API_URL}/search_memory_facts", 
+                f"{self.GRAPHITI_API_URL}/search", 
                 json=payload, 
                 timeout=self.memory_search_timeout
             )
@@ -803,7 +803,7 @@ Just ask me naturally and I'll use the right tool to help you! For example:
                 "source": "message",
                 "source_description": "Voice agent conversation"
             }
-            resp = requests.post(f"{self.GRAPHITI_API_URL}/episodes", json=payload, timeout=3)
+            resp = requests.post(f"{self.GRAPHITI_API_URL}/add_memory", json=payload, timeout=3)
             if resp.ok:
                 logger.info(f"[Graphiti] Stored memory via REST: {episode_name}")
                 self.memory_stats['memories_stored'] += 1
