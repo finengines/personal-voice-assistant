@@ -282,22 +282,18 @@ Memory System Guidelines:
             return []
 
     async def _search_memory_facts(self, query: str, max_facts: int = 5) -> List[str]:
-        """Search memory facts using REST API, with local fallback when remote is unavailable"""
+        """Search memory facts using REST API (/retrieve), with local fallback when remote is unavailable"""
         # If Graphiti isn't configured, use local session memory
         if not self.memory_api_available or self._is_placeholder_graphiti_url(self.GRAPHITI_API_URL):
             return self._search_local_memory(query=query, max_facts=max_facts)
 
         try:
-            payload = {
-                "query": query,
-                "max_facts": max_facts,
-                "group_ids": ["global"]
-            }
-            
+            payload = {"query": query, "max_results": max_facts, "group_ids": ["global"]}
+            # Graphiti Knowledge Server uses /retrieve endpoint
             resp = requests.post(
-                f"{self.GRAPHITI_API_URL}/search", 
-                json=payload, 
-                timeout=self.memory_search_timeout
+                f"{self.GRAPHITI_API_URL.rstrip('/')}/retrieve",
+                json=payload,
+                timeout=self.memory_search_timeout,
             )
             
             if resp.ok:
@@ -305,7 +301,10 @@ Memory System Guidelines:
                 if 'facts' in data:
                     return [fact.get('fact', '') for fact in data['facts'] if fact.get('fact')]
                 elif 'results' in data:
-                    return data['results']
+                    return [str(x) for x in data['results']]
+                elif 'items' in data:
+                    # Some builds return {items: [...]} for retrieve
+                    return [str(x) for x in data['items']]
                 else:
                     # Handle different response formats
                     return []
@@ -870,7 +869,7 @@ Just ask me naturally and I'll use the right tool to help you! For example:
         return unique_facts
 
     async def store_memory(self, episode_body: str, name: str = None):
-        """Store information to memory using REST API with local fallback"""
+        """Store information to memory using REST API (/ingest) with local fallback"""
         try:
             episode_name = name or f"Voice Memory {datetime.utcnow().isoformat()}"
             
@@ -893,7 +892,12 @@ Just ask me naturally and I'll use the right tool to help you! For example:
                 self._emit_memory_event('memory-fallback', "Saved to local session memory (offline)")
                 return
 
-            resp = requests.post(f"{self.GRAPHITI_API_URL}/messages", json=payload, timeout=3)
+            # Graphiti Knowledge Server uses /ingest endpoint
+            resp = requests.post(
+                f"{self.GRAPHITI_API_URL.rstrip('/')}/ingest",
+                json=payload,
+                timeout=3,
+            )
             if resp.ok:
                 logger.info(f"[Graphiti] Stored memory via REST: {episode_name}")
                 self.memory_stats['memories_stored'] += 1
