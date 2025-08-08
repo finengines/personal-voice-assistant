@@ -157,10 +157,13 @@ async def get_mcp_manager():
         except Exception:
             # fall through to JSON config
             pass
-    # File-backed manager – ensure config is loaded
+    # File/alt manager – ensure config is loaded (sync or async)
     if hasattr(mcp_manager, "load_config"):
         try:
-            mcp_manager.load_config()  # type: ignore[attr-defined]
+            if asyncio.iscoroutinefunction(mcp_manager.load_config):
+                await mcp_manager.load_config()  # type: ignore[attr-defined]
+            else:
+                mcp_manager.load_config()  # type: ignore[attr-defined]
         except Exception:
             pass
     return mcp_manager
