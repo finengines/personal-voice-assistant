@@ -79,11 +79,11 @@ const FlowFieldParticles = ({
       lastTime = now;
 
       fade();
-      const t = now * 0.0015;
+      const t = now * (0.0015 + features.mid * 0.0008);
 
       // Audio reactivity
-      const speedGain = baseSpeed * (0.6 + features.bass * 1.8 + features.mid * 0.4);
-      const jitter = (features.treble ** 2) * 0.8;
+      const speedGain = baseSpeed * (0.45 + features.bass * 2.2 + features.mid * 0.8);
+      const jitter = (features.treble ** 2) * 1.2;
 
       ctx.globalCompositeOperation = 'lighter';
 
@@ -113,8 +113,8 @@ const FlowFieldParticles = ({
         if (p.y < 0) p.y += pxSize;
         if (p.y > pxSize) p.y -= pxSize;
 
-        const alpha = Math.min(0.9, 0.25 + features.rms * 0.9);
-        const sizePx = 0.9 + features.rms * 1.1;
+        const alpha = Math.min(0.95, 0.18 + features.rms * 1.2);
+        const sizePx = 0.8 + features.rms * 1.4 + (features.beat ? 0.6 : 0);
         drawPoint(p.x, p.y, alpha, sizePx);
       }
 

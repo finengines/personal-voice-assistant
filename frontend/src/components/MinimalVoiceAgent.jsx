@@ -110,6 +110,7 @@ const MinimalVoiceAgent = ({
                   color={visualSettings.particleColor || '#3a3a3a'}
                   size={320}
                   reactToAudioOnly
+                  sensitivity={visualSettings.particleSensitivity ?? 1.2}
                 />
               </div>
             )}
@@ -154,15 +155,15 @@ const MinimalVoiceAgent = ({
                 />
               </div>
             )}
-            <button
-              className={`primary-btn ${isConnected ? 'connected' : ''} ${isConnecting ? 'connecting' : ''} ${['particles','flow-field','constellation','radial-spectrum'].includes(visualSettings.visualStyle) ? 'outline' : ''}`}
+            {/* Click visual area to connect/disconnect */}
+            <div
+              role="button"
               onClick={() => isConnected ? onDisconnect() : onConnect(localSelectedPreset?.id)}
-              disabled={isConnecting}
-              title={getButtonText()}
-            >
-              {!isConnecting && isConnected && agentReady && <div className="connection-pulse"></div>}
-              {!isConnecting && !isConnected && getConnectionIcon()}
-            </button>
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { isConnected ? onDisconnect() : onConnect(localSelectedPreset?.id); } }}
+              tabIndex={0}
+              aria-label={getButtonText()}
+              style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: 340, height: 340, borderRadius: '50%', zIndex: 2, cursor: isConnecting ? 'not-allowed' : 'pointer', outline: 'none', background: 'transparent' }}
+            />
 
             {/* Tool call particle effect overlay */}
             <ParticleIndicator isVisible={toolIndicator.isVisible} label={toolIndicator.label} />
@@ -177,17 +178,24 @@ const MinimalVoiceAgent = ({
         </div>
 
         <div className="controls-section">
-          {isConnected && agentReady && (
-            <div className="voice-controls">
-              <button
-                className={`mute-btn ${isMuted ? 'muted' : ''}`}
-                onClick={onToggleMute}
-                title={isMuted ? 'Unmute' : 'Mute'}
-              >
-                {isMuted ? <FiVolumeX size={24} /> : <FiVolume2 size={24} />}
-              </button>
-            </div>
-          )}
+          <div className="voice-controls">
+            <button
+              className={`mute-btn ${isMuted ? 'muted' : ''}`}
+              onClick={onToggleMute}
+              title={isMuted ? 'Unmute' : 'Mute'}
+              disabled={!isConnected}
+            >
+              {isMuted ? <FiVolumeX size={24} /> : <FiVolume2 size={24} />}
+            </button>
+            <button
+              className={`retry-btn`}
+              onClick={() => isConnected ? onDisconnect() : onConnect(localSelectedPreset?.id)}
+              disabled={isConnecting}
+              style={{ marginLeft: 12 }}
+            >
+              {isConnecting ? 'Connecting…' : (isConnected ? 'Disconnect' : 'Connect')}
+            </button>
+          </div>
 
           {status.type === 'error' && (
             <div className="error-actions">

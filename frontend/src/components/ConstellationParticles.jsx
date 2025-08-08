@@ -53,8 +53,8 @@ const ConstellationParticles = ({
       const cy = pxSize / 2;
 
       // Audio reactive radius and glow
-      const connRadius = 42 + features.rms * 80 + features.mid * 40;
-      const pulse = features.beat ? 1.35 : 1.0;
+      const connRadius = 36 + features.rms * 110 + features.mid * 60;
+      const pulse = features.beat ? 1.5 : 1.0;
 
       // Draw points
       for (let i = 0; i < pointsRef.current.length; i += 1) {
@@ -67,7 +67,7 @@ const ConstellationParticles = ({
       }
 
       // Lines
-      ctx.lineWidth = Math.max(0.6, 1.2 - features.rms * 0.9);
+      ctx.lineWidth = Math.max(0.6, 1.4 - features.rms * 1.1);
       ctx.strokeStyle = lineColor;
       for (let i = 0; i < pointsRef.current.length; i += 1) {
         const a = pointsRef.current[i];
@@ -77,7 +77,7 @@ const ConstellationParticles = ({
           const dy = a.y - b.y;
           const d = Math.hypot(dx, dy);
           if (d < connRadius) {
-            const alpha = Math.max(0, 1 - d / connRadius) * (0.35 + features.rms * 0.4);
+            const alpha = Math.max(0, 1 - d / connRadius) * (0.28 + features.rms * 0.7 + (features.beat ? 0.2 : 0));
             ctx.globalAlpha = Math.min(0.9, alpha);
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
@@ -92,7 +92,7 @@ const ConstellationParticles = ({
       ctx.fillStyle = color;
       for (let i = 0; i < pointsRef.current.length; i += 1) {
         const p = pointsRef.current[i];
-        const radius = 1.2 + features.rms * 1.2 + features.treble * 0.5;
+        const radius = 1.0 + features.rms * 1.5 + features.treble * 0.7 + (features.beat ? 0.6 : 0);
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
         ctx.fill();

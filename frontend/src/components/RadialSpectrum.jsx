@@ -40,7 +40,8 @@ const RadialSpectrum = ({
       try { analyser.getByteFrequencyData(freqArray); } catch (_) {}
 
       const step = Math.floor(freqArray.length / barCount);
-      const inner = pxSize * innerRadiusRatio * (0.9 + 0.1 * Math.sin(performance.now() / 1500));
+      const beatPulse = analyser ? (Math.sin(performance.now() / 100) > 0.98 ? 1.04 : 1.0) : 1.0;
+      const inner = pxSize * innerRadiusRatio * (0.92 + 0.12 * beatPulse);
       const maxBar = pxSize * 0.24;
 
       for (let i = 0; i < barCount; i += 1) {
@@ -52,7 +53,7 @@ const RadialSpectrum = ({
         for (let j = start; j < end; j += 1) sum += freqArray[j];
         const avg = sum / Math.max(1, end - start);
         const magnitude = (avg / 255);
-        const barLen = inner + magnitude * maxBar;
+        const barLen = inner + Math.pow(magnitude, 1.1) * maxBar;
 
         const x1 = cx + Math.cos(angle) * inner;
         const y1 = cy + Math.sin(angle) * inner;

@@ -89,8 +89,17 @@ const SettingsModal = ({ show, onClose, livekitUrl, setLivekitUrl, livekitToken,
                       onChange={(e) => setVisualSettings({ ...visualSettings, particleColor: e.target.value })}
                       style={{ background: '#222', border: '1px solid #444', borderRadius: 8, padding: 4 }}
                     />
+                    <span style={{ color: '#bbb', fontSize: 13, marginLeft: 8 }}>Sensitivity</span>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={3.0}
+                      step={0.05}
+                      value={visualSettings?.particleSensitivity ?? 1.2}
+                      onChange={(e) => setVisualSettings({ ...visualSettings, particleSensitivity: parseFloat(e.target.value) })}
+                    />
                   </div>
-                  <p className="input-hint">Audio‑reactive sphere with subtle motion. Adjust density/color.</p>
+                  <p className="input-hint">Audio‑reactive sphere. Adjust density/color/sensitivity.</p>
                 </>
               )}
 
