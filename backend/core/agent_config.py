@@ -215,10 +215,10 @@ Always prioritize being helpful while building a contextual understanding of the
     presets.append(AgentPresetConfig(
         id="default-assistant",
         name="Default Assistant",
-        description="A helpful and friendly general-purpose assistant with memory capabilities",
+        description="A helpful and friendly general-purpose assistant with MCP-based memory tools",
         system_prompt=memory_aware_prompt,
         voice_config=VoiceConfig(provider="openai", voice="ash"),
-        mcp_server_ids=["graphiti-memory"],  # Graphiti memory system (also loaded automatically from env vars)
+        mcp_server_ids=["graphiti-memory"],  # Graphiti memory system via MCP
         llm_config=LLMConfig(model="gpt-4o-mini", temperature=0.7),
         stt_config=STTConfig(provider="deepgram", model="nova-3", language="multi"),
         agent_config=AgentConfig(allow_interruptions=True, max_tool_steps=5),

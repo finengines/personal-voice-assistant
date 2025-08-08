@@ -84,6 +84,9 @@ load_dotenv()
 # MCP client for Graphiti integration will be available through the session
 GRAPHITI_AVAILABLE = True  # Will be set based on MCP server availability
 
+# Toggle to completely disable internal/REST-based memory system and rely solely on MCP tools
+INTERNAL_MEMORY_ENABLED = False
+
 
 class DynamicAgent(Agent):
     """Agent that configures itself based on a preset and includes built-in tools with enhanced memory capabilities"""
@@ -135,14 +138,13 @@ class DynamicAgent(Agent):
         if self.enable_fast_preresponse:
             self._setup_fast_preresponse()
         
-        # Memory system initialization
+        # Memory system initialization (disabled in simplified mode; rely on MCP tools)
         self.memory_threshold = 3
         self.conversation_turns = 0
         self.conversation_start_time = None
         self.conversation_history = []
         self.memory_context = ""
-        # Disable remote memory by default if Graphiti URLs are placeholders
-        self.memory_api_available = not self._is_placeholder_graphiti_url(self.GRAPHITI_API_URL)
+        self.memory_api_available = False if not INTERNAL_MEMORY_ENABLED else not self._is_placeholder_graphiti_url(self.GRAPHITI_API_URL)
         self.local_memory = []
         
         # Memory performance tracking
@@ -291,91 +293,12 @@ Memory System Guidelines:
             return []
 
     async def _search_memory_facts(self, query: str, max_facts: int = 5) -> List[str]:
-        """Search memory facts using Graphiti REST API (/search), with local fallback when remote is unavailable"""
-        # If Graphiti isn't configured, use local session memory
-        if not self.memory_api_available or self._is_placeholder_graphiti_url(self.GRAPHITI_API_URL):
-            return self._search_local_memory(query=query, max_facts=max_facts)
-
-        try:
-            # Graphiti REST API accepts POST /search with payload { query, max_facts, group_ids }
-            payload = {"query": query, "max_facts": max_facts, "group_ids": ["global"]}
-            base = self.GRAPHITI_API_URL.rstrip('/')
-            candidates = [
-                ("POST", f"{base}/search", payload),
-                ("POST", f"{base}/api/search", payload),  # fallback shape if proxied
-            ]
-            for method, url, body in candidates:
-                try:
-                    resp = requests.request(method, url, json=body, timeout=self.memory_search_timeout)
-                except Exception:
-                    continue
-                if not resp.ok:
-                    continue
-                try:
-                    data = resp.json()
-                except Exception:
-                    continue
-                # Accept several shapes defensively
-                if isinstance(data, dict):
-                    if 'facts' in data:
-                        return [fact.get('fact', '') for fact in data['facts'] if fact.get('fact')]
-                    if 'results' in data:
-                        return [str(x) for x in data['results']]
-                    if 'items' in data:
-                        return [str(x) for x in data['items']]
-                if isinstance(data, list):
-                    return [str(x) for x in data][:max_facts]
-            # If nothing worked, fall back to local
-            return self._search_local_memory(query=query, max_facts=max_facts)
-        except Exception as e:
-            logger.debug(f"Memory search error for '{query}': {e}")
-            return self._search_local_memory(query=query, max_facts=max_facts)
+        """Simplified: disable REST memory search; rely on MCP tools or conversation context only."""
+        return []
 
     def _search_local_memory(self, query: str, max_facts: int = 5) -> List[str]:
-        """Lightweight in-process memory search across conversation history and local session memories."""
-        try:
-            query_norm = query.lower().strip()
-            if not query_norm:
-                return []
-
-            # Collect candidate texts from history and local memory storage
-            candidates: List[str] = []
-            for turn in self.conversation_history[-100:]:  # recent context first
-                content = (turn.get('content') or '').strip()
-                if content:
-                    candidates.append(content)
-            for item in self.local_memory[-100:]:
-                try:
-                    # Support both payload format and simple dicts
-                    if isinstance(item, dict):
-                        msg = item.get('messages') or []
-                        if msg and isinstance(msg, list):
-                            for m in msg:
-                                text = (m.get('content') or '').strip()
-                                if text:
-                                    candidates.append(text)
-                        else:
-                            text = (item.get('episode_body') or '').strip()
-                            if text:
-                                candidates.append(text)
-                except Exception:
-                    continue
-
-            # Simple ranking: substring and token overlap
-            def score(text: str) -> float:
-                text_l = text.lower()
-                if query_norm in text_l:
-                    return 2.0 + min(len(query_norm) / max(len(text_l), 1), 1.0)
-                # Token overlap heuristic
-                q_tokens = set(re.findall(r"\b\w+\b", query_norm))
-                t_tokens = set(re.findall(r"\b\w+\b", text_l))
-                overlap = len(q_tokens & t_tokens)
-                return overlap / (len(q_tokens) + 1e-6)
-
-            ranked = sorted(set(candidates), key=score, reverse=True)
-            return ranked[:max_facts]
-        except Exception:
-            return []
+        """Simplified: no local memory search results."""
+        return []
 
 
 
@@ -407,29 +330,16 @@ Memory System Guidelines:
             self._enhanced_instructions = enhanced_prompt
             await self.update_instructions(enhanced_prompt)
         
-        # Check MCP server availability
+        # Check MCP server availability (simplified: rely solely on MCP; internal memory disabled)
         try:
             if hasattr(self, 'session') and hasattr(self.session, 'mcp_servers') and self.session.mcp_servers:
-                self.memory_api_available = True
-                logger.info(f"✅ Memory system initialized with {len(self.session.mcp_servers)} MCP servers")
+                logger.info(f"✅ MCP connected: {len(self.session.mcp_servers)} server(s)")
                 for i, server in enumerate(self.session.mcp_servers):
                     logger.info(f"  - MCP Server {i+1}: {type(server).__name__} ({getattr(server, 'url', 'N/A')})")
-                    try:
-                        tools = await server.list_tools()
-                        logger.info(f"    Available tools: {len(tools) if tools else 0}")
-                        if tools:
-                            for tool in tools[:3]:  # Log first 3 tools
-                                tool_name = getattr(tool, 'name', str(tool))
-                                logger.info(f"      - {tool_name}")
-                    except Exception as e:
-                        logger.warning(f"    Failed to list tools: {e}")
             else:
-                logger.info("ℹ️ Using REST API for memory operations (no MCP servers found)")
-                logger.info(f"🔍 Session available: {hasattr(self, 'session')}")
-                if hasattr(self, 'session'):
-                    logger.info(f"🔍 Session MCP servers: {getattr(self.session, 'mcp_servers', 'Not found')}")
+                logger.warning("❗ No MCP servers found in session; tools will be unavailable")
         except RuntimeError as e:
-            logger.debug(f"Session not available yet, will use REST API for memory operations: {e}")
+            logger.debug(f"Session not available yet: {e}")
 
     @function_tool
     async def get_current_time(self, location: str = "local", timezone_name: str = "") -> str:
