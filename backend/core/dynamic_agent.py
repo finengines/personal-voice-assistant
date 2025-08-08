@@ -330,15 +330,51 @@ Memory System Guidelines:
             self._enhanced_instructions = enhanced_prompt
             await self.update_instructions(enhanced_prompt)
         
-        # Check MCP server availability
+        # Check MCP server availability and register MCP tools
         try:
             if hasattr(self, 'session') and hasattr(self.session, 'mcp_servers') and self.session.mcp_servers:
                 self.memory_api_available = True
                 logger.info("✅ Memory system initialized with MCP servers")
+                
+                # Register MCP tools with the agent (as per LiveKit docs)
+                await self._register_mcp_tools()
             else:
                 logger.info("ℹ️ Using REST API for memory operations")
         except RuntimeError:
             logger.debug("Session not available yet, will use REST API for memory operations")
+
+    async def _register_mcp_tools(self):
+        """Register MCP server tools with the agent as per LiveKit documentation"""
+        try:
+            if not hasattr(self, 'session') or not self.session.mcp_servers:
+                return
+            
+            logger.info(f"🔧 Registering tools from {len(self.session.mcp_servers)} MCP server(s)")
+            
+            # Get tools from all MCP servers
+            all_tools = []
+            for i, mcp_server in enumerate(self.session.mcp_servers):
+                try:
+                    # Get available tools from the MCP server
+                    if hasattr(mcp_server, 'list_tools'):
+                        server_tools = await mcp_server.list_tools()
+                        if server_tools:
+                            all_tools.extend(server_tools)
+                            logger.info(f"✅ Retrieved {len(server_tools)} tools from MCP server {i+1}")
+                    else:
+                        logger.warning(f"⚠️ MCP server {i+1} doesn't support list_tools")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to get tools from MCP server {i+1}: {e}")
+            
+            if all_tools:
+                # Register tools with the agent using update_tools()
+                self.update_tools(all_tools)
+                logger.info(f"🎯 Successfully registered {len(all_tools)} MCP tools with agent")
+            else:
+                logger.warning("⚠️ No tools retrieved from MCP servers")
+                
+        except Exception as e:
+            logger.error(f"❌ Error registering MCP tools: {e}")
 
     @function_tool
     async def get_current_time(self, location: str = "local", timezone_name: str = "") -> str:
