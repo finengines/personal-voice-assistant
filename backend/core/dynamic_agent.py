@@ -347,34 +347,76 @@ Memory System Guidelines:
         """Register MCP server tools with the agent as per LiveKit documentation"""
         try:
             if not hasattr(self, 'session') or not self.session.mcp_servers:
+                logger.warning("⚠️ No session or MCP servers available for tool registration")
                 return
             
-            logger.info(f"🔧 Registering tools from {len(self.session.mcp_servers)} MCP server(s)")
+            logger.info(f"🔧 Attempting to register tools from {len(self.session.mcp_servers)} MCP server(s)")
             
-            # Get tools from all MCP servers
+            # Log MCP server details for debugging
+            for i, mcp_server in enumerate(self.session.mcp_servers):
+                logger.info(f"🔍 MCP Server {i+1}: {type(mcp_server).__name__}")
+                logger.info(f"   - Available methods: {[m for m in dir(mcp_server) if not m.startswith('_')]}")
+            
+            # Try different approaches to get tools
             all_tools = []
             for i, mcp_server in enumerate(self.session.mcp_servers):
                 try:
-                    # Get available tools from the MCP server
+                    logger.info(f"🔄 Attempting to get tools from MCP server {i+1}...")
+                    
+                    # Method 1: Direct list_tools call
                     if hasattr(mcp_server, 'list_tools'):
-                        server_tools = await mcp_server.list_tools()
-                        if server_tools:
-                            all_tools.extend(server_tools)
-                            logger.info(f"✅ Retrieved {len(server_tools)} tools from MCP server {i+1}")
-                    else:
-                        logger.warning(f"⚠️ MCP server {i+1} doesn't support list_tools")
+                        try:
+                            server_tools = await mcp_server.list_tools()
+                            if server_tools:
+                                all_tools.extend(server_tools)
+                                logger.info(f"✅ Method 1: Retrieved {len(server_tools)} tools from MCP server {i+1}")
+                                continue
+                        except Exception as e:
+                            logger.warning(f"⚠️ Method 1 failed for server {i+1}: {e}")
+                    
+                    # Method 2: Check if it's a LiveKit MCP server with different interface
+                    if hasattr(mcp_server, 'tools'):
+                        try:
+                            server_tools = mcp_server.tools
+                            if server_tools:
+                                all_tools.extend(server_tools)
+                                logger.info(f"✅ Method 2: Retrieved {len(server_tools)} tools from MCP server {i+1}")
+                                continue
+                        except Exception as e:
+                            logger.warning(f"⚠️ Method 2 failed for server {i+1}: {e}")
+                    
+                    # Method 3: Try to initialize and then get tools
+                    if hasattr(mcp_server, 'initialize'):
+                        try:
+                            await mcp_server.initialize()
+                            if hasattr(mcp_server, 'list_tools'):
+                                server_tools = await mcp_server.list_tools()
+                                if server_tools:
+                                    all_tools.extend(server_tools)
+                                    logger.info(f"✅ Method 3: Retrieved {len(server_tools)} tools from MCP server {i+1}")
+                                    continue
+                        except Exception as e:
+                            logger.warning(f"⚠️ Method 3 failed for server {i+1}: {e}")
+                    
+                    logger.warning(f"⚠️ Could not retrieve tools from MCP server {i+1}")
+                    
                 except Exception as e:
-                    logger.warning(f"⚠️ Failed to get tools from MCP server {i+1}: {e}")
+                    logger.error(f"❌ Error processing MCP server {i+1}: {e}")
             
             if all_tools:
                 # Register tools with the agent using update_tools()
-                self.update_tools(all_tools)
-                logger.info(f"🎯 Successfully registered {len(all_tools)} MCP tools with agent")
+                try:
+                    self.update_tools(all_tools)
+                    logger.info(f"🎯 Successfully registered {len(all_tools)} MCP tools with agent")
+                except Exception as e:
+                    logger.error(f"❌ Failed to register tools with agent: {e}")
             else:
-                logger.warning("⚠️ No tools retrieved from MCP servers")
+                logger.warning("⚠️ No tools retrieved from any MCP servers")
                 
         except Exception as e:
-            logger.error(f"❌ Error registering MCP tools: {e}")
+            logger.error(f"❌ Error in MCP tool registration: {e}")
+            import traceback
+            logger.error(f"📍 Traceback: {traceback.format_exc()}")
 
     @function_tool
     async def get_current_time(self, location: str = "local", timezone_name: str = "") -> str:
