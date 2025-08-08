@@ -78,6 +78,7 @@ from database import init_db
 
 logger = logging.getLogger("dynamic-agent")
 
+# Ensure env vars from .env are available when running locally
 load_dotenv()
 
 # MCP client for Graphiti integration will be available through the session
@@ -90,6 +91,13 @@ class DynamicAgent(Agent):
     # Graphiti API configuration
     GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
     GRAPHITI_API_URL = os.getenv("GRAPHITI_API_URL", "https://your-graphiti-instance.com")
+
+    @staticmethod
+    def _is_placeholder_graphiti_url(url: Optional[str]) -> bool:
+        try:
+            return (not url) or ("your-graphiti-instance.com" in url)
+        except Exception:
+            return True
     
     def __init__(self, preset: AgentPresetConfig, ctx_room=None) -> None:
         # Store preset for async initialization
@@ -124,7 +132,8 @@ class DynamicAgent(Agent):
         self.conversation_start_time = None
         self.conversation_history = []
         self.memory_context = ""
-        self.memory_api_available = True
+        # Disable remote memory by default if Graphiti URLs are placeholders
+        self.memory_api_available = not self._is_placeholder_graphiti_url(self.GRAPHITI_API_URL)
         self.local_memory = []
         
         # Memory performance tracking
@@ -273,7 +282,11 @@ Memory System Guidelines:
             return []
 
     async def _search_memory_facts(self, query: str, max_facts: int = 5) -> List[str]:
-        """Search memory facts using REST API"""
+        """Search memory facts using REST API, with local fallback when remote is unavailable"""
+        # If Graphiti isn't configured, use local session memory
+        if not self.memory_api_available or self._is_placeholder_graphiti_url(self.GRAPHITI_API_URL):
+            return self._search_local_memory(query=query, max_facts=max_facts)
+
         try:
             payload = {
                 "query": query,
@@ -298,11 +311,57 @@ Memory System Guidelines:
                     return []
             else:
                 logger.debug(f"Memory search failed with status {resp.status_code}: {resp.text}")
-            
-            return []
+                # Fallback to local memory when remote search fails
+                return self._search_local_memory(query=query, max_facts=max_facts)
             
         except Exception as e:
             logger.debug(f"Memory search error for '{query}': {e}")
+            return self._search_local_memory(query=query, max_facts=max_facts)
+
+    def _search_local_memory(self, query: str, max_facts: int = 5) -> List[str]:
+        """Lightweight in-process memory search across conversation history and local session memories."""
+        try:
+            query_norm = query.lower().strip()
+            if not query_norm:
+                return []
+
+            # Collect candidate texts from history and local memory storage
+            candidates: List[str] = []
+            for turn in self.conversation_history[-100:]:  # recent context first
+                content = (turn.get('content') or '').strip()
+                if content:
+                    candidates.append(content)
+            for item in self.local_memory[-100:]:
+                try:
+                    # Support both payload format and simple dicts
+                    if isinstance(item, dict):
+                        msg = item.get('messages') or []
+                        if msg and isinstance(msg, list):
+                            for m in msg:
+                                text = (m.get('content') or '').strip()
+                                if text:
+                                    candidates.append(text)
+                        else:
+                            text = (item.get('episode_body') or '').strip()
+                            if text:
+                                candidates.append(text)
+                except Exception:
+                    continue
+
+            # Simple ranking: substring and token overlap
+            def score(text: str) -> float:
+                text_l = text.lower()
+                if query_norm in text_l:
+                    return 2.0 + min(len(query_norm) / max(len(text_l), 1), 1.0)
+                # Token overlap heuristic
+                q_tokens = set(re.findall(r"\b\w+\b", query_norm))
+                t_tokens = set(re.findall(r"\b\w+\b", text_l))
+                overlap = len(q_tokens & t_tokens)
+                return overlap / (len(q_tokens) + 1e-6)
+
+            ranked = sorted(set(candidates), key=score, reverse=True)
+            return ranked[:max_facts]
+        except Exception:
             return []
 
 
@@ -811,7 +870,7 @@ Just ask me naturally and I'll use the right tool to help you! For example:
         return unique_facts
 
     async def store_memory(self, episode_body: str, name: str = None):
-        """Store information to memory using REST API"""
+        """Store information to memory using REST API with local fallback"""
         try:
             episode_name = name or f"Voice Memory {datetime.utcnow().isoformat()}"
             
@@ -827,6 +886,13 @@ Just ask me naturally and I'll use the right tool to help you! For example:
                     }
                 ]
             }
+            if not self.memory_api_available or self._is_placeholder_graphiti_url(self.GRAPHITI_API_URL):
+                # Local-only mode
+                self.local_memory.append(payload)
+                self.memory_stats['memories_stored'] += 1
+                self._emit_memory_event('memory-fallback', "Saved to local session memory (offline)")
+                return
+
             resp = requests.post(f"{self.GRAPHITI_API_URL}/messages", json=payload, timeout=3)
             if resp.ok:
                 logger.info(f"[Graphiti] Stored memory via REST: {episode_name}")
@@ -1579,27 +1645,30 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
     # Always add Graphiti MCP server for memory functionality
     GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
     try:
-        logger.info(f"🔌 Adding default Graphiti MCP server: {GRAPHITI_MCP_URL}")
-        graphiti_server = mcp.MCPServerHTTP(
-            url=GRAPHITI_MCP_URL, 
-            timeout=10.0,  # Reduced timeout
-            sse_read_timeout=60.0,  # Reduced from 120
-        )
-        mcp_servers.append(graphiti_server)
-        logger.info(f"✅ Added default Graphiti MCP server: {GRAPHITI_MCP_URL}")
-        logger.info(f"📊 Total MCP servers after Graphiti addition: {len(mcp_servers)}")
-        
-        # Test connectivity
-        try:
-            # This will attempt to connect and list tools
-            tools = await graphiti_server.list_tools()
-            logger.info(f"🔧 Graphiti MCP server has {len(tools) if tools else 0} tools available")
-            if tools:
-                for tool in tools[:3]:  # Log first 3 tools
-                    tool_name = getattr(tool, 'name', str(tool))
-                    logger.info(f"  - Tool: {tool_name}")
-        except Exception as test_e:
-            logger.warning(f"⚠️ Graphiti MCP server added but connection test failed: {test_e}")
+        if "your-graphiti-instance.com" in GRAPHITI_MCP_URL or not GRAPHITI_MCP_URL.strip():
+            logger.info("ℹ️ Skipping default Graphiti MCP server (not configured)")
+        else:
+            logger.info(f"🔌 Adding default Graphiti MCP server: {GRAPHITI_MCP_URL}")
+            graphiti_server = mcp.MCPServerHTTP(
+                url=GRAPHITI_MCP_URL, 
+                timeout=10.0,  # Reduced timeout
+                sse_read_timeout=60.0,  # Reduced from 120
+            )
+            mcp_servers.append(graphiti_server)
+            logger.info(f"✅ Added default Graphiti MCP server: {GRAPHITI_MCP_URL}")
+            logger.info(f"📊 Total MCP servers after Graphiti addition: {len(mcp_servers)}")
+            
+            # Test connectivity
+            try:
+                # This will attempt to connect and list tools
+                tools = await graphiti_server.list_tools()
+                logger.info(f"🔧 Graphiti MCP server has {len(tools) if tools else 0} tools available")
+                if tools:
+                    for tool in tools[:3]:  # Log first 3 tools
+                        tool_name = getattr(tool, 'name', str(tool))
+                        logger.info(f"  - Tool: {tool_name}")
+            except Exception as test_e:
+                logger.warning(f"⚠️ Graphiti MCP server added but connection test failed: {test_e}")
     except Exception as e:
         logger.error(f"❌ Failed to add default Graphiti MCP server: {e}", exc_info=True)
     
@@ -1806,17 +1875,12 @@ async def entrypoint(ctx: JobContext):
     # Attach room info to all structured logs
     ctx.log_context_fields = {"room": ctx.room.name}
 
-    # Your original entrypoint code is temporarily commented out below
-    # You can uncomment it once you've verified that this minimal entrypoint is being called.
-    # (The original code is preserved for now)
-    
-    # # ---------------------------------------------------------------------
-    # # 1. Load preset configuration (fast operation)
-    # # ---------------------------------------------------------------------
-    # logger.info("🔄 Loading preset configuration for room '%s'…", ctx.room.name)
-    # preset = await get_preset_for_room(ctx)
-    # logger.info("✅ Using preset '%s'", preset.name)
-    # (and so on...)
+    # ---------------------------------------------------------------------
+    # 1. Load preset configuration (required for the rest of the flow)
+    # ---------------------------------------------------------------------
+    logger.info("🔄 Loading preset configuration for room '%s'…", ctx.room.name)
+    preset = await get_preset_for_room(ctx)
+    logger.info("✅ Using preset '%s'", preset.name)
 
     # ---------------------------------------------------------------------
     # 2. Check model compatibility (with caching to reduce startup time)

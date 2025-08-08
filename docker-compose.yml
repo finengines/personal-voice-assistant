@@ -80,6 +80,10 @@ services:
       - GLOBAL_SETTINGS_API_PORT=${GLOBAL_SETTINGS_API_PORT:-8084}
       - AUTH_API_PORT=${AUTH_API_PORT:-8001}
       
+      # Memory and Knowledge Services (Optional)
+      - GRAPHITI_MCP_URL=${GRAPHITI_MCP_URL:-https://your-graphiti-instance.com/sse}
+      - GRAPHITI_API_URL=${GRAPHITI_API_URL:-https://your-graphiti-instance.com}
+      
       # Security Configuration
       - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_key_here_change_in_production}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}

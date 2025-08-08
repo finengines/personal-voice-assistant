@@ -3,7 +3,7 @@ import './SettingsModal.css';
 import { FiX, FiRefreshCw, FiSave, FiShield } from 'react-icons/fi';
 import TOTPSetup from './TOTPSetup';
 
-const SettingsModal = ({ show, onClose, livekitUrl, setLivekitUrl, livekitToken, setLivekitToken, onGenerateToken }) => {
+const SettingsModal = ({ show, onClose, livekitUrl, setLivekitUrl, livekitToken, setLivekitToken, onGenerateToken, visualSettings, setVisualSettings }) => {
   const [showTOTPSetup, setShowTOTPSetup] = useState(false);
   
   if (!show) return null;
@@ -28,6 +28,32 @@ const SettingsModal = ({ show, onClose, livekitUrl, setLivekitUrl, livekitToken,
         {/* Content */}
         <div className="modal-content">
           <div className="settings-section">
+            {/* Visuals */}
+            <div className="input-group">
+              <label>Visual Effects</label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={!!visualSettings?.particleSphere}
+                  onChange={(e) => setVisualSettings({ ...visualSettings, particleSphere: e.target.checked })}
+                />
+                Enable Particle Sphere (default)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                <span style={{ color: '#bbb', fontSize: 13 }}>Density</span>
+                <select
+                  value={visualSettings?.particleDensity || 'medium'}
+                  onChange={(e) => setVisualSettings({ ...visualSettings, particleDensity: e.target.value })}
+                  style={{ background: '#222', color: '#eee', border: '1px solid #444', borderRadius: 8, padding: '6px 10px' }}
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              <p className="input-hint">Audio‑reactive particle sphere inspired by Perplexity. Disable if you prefer minimal UI or have motion sensitivity.</p>
+            </div>
+
             <div className="input-group">
               <label htmlFor="livekit-url">LiveKit Server URL</label>
               <input 

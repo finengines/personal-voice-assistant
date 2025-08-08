@@ -6,6 +6,7 @@ FastAPI endpoints for managing MCP server configurations.
 """
 
 import os
+from dotenv import load_dotenv
 import asyncio
 from typing import Dict, List, Optional, Any
 from contextlib import asynccontextmanager
@@ -102,6 +103,9 @@ async def lifespan(app: FastAPI):
     print("🛑 Shutting down MCP API server...")
     await mcp_manager.stop_all_servers()
     print("✅ MCP API server shutdown complete")
+
+# Load environment variables from .env when running outside Docker
+load_dotenv()
 
 # Create FastAPI app with lifespan
 app = FastAPI(
@@ -646,7 +650,7 @@ async def memory_status():
             status_data["graphiti_mcp"]["status"] = f"failed_{str(e)[:50]}"
         
         # Check MCP servers
-        manager = get_mcp_manager()
+        manager = await get_mcp_manager()
         if hasattr(manager, 'active_servers'):
             for server_id, server in manager.active_servers.items():
                 server_info = {

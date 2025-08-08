@@ -3,6 +3,7 @@ import './MinimalVoiceAgent.css';
 import { FiSettings, FiChevronDown, FiVolume2, FiVolumeX } from 'react-icons/fi';
 import MemoryIndicator from './MemoryIndicator';
 import ParticleIndicator from './ParticleIndicator';
+import AudioParticleSphere from './AudioParticleSphere';
 
 const MinimalVoiceAgent = ({
   isConnected,
@@ -23,6 +24,9 @@ const MinimalVoiceAgent = ({
   presets = [],
   selectedPreset,
   onPresetChange,
+  // visual
+  visualSettings = { particleSphere: true, particleDensity: 'medium' },
+  audioAnalyser = null,
 }) => {
   const [showPresets, setShowPresets] = useState(false);
   const [localSelectedPreset, setLocalSelectedPreset] = useState(selectedPreset);
@@ -87,6 +91,12 @@ const MinimalVoiceAgent = ({
       <div className="main-interaction">
         <div className="voice-visualizer">
           <div className="connection-container">
+            {/* Particle sphere background */}
+            {visualSettings.particleSphere && (
+              <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 1 }}>
+                <AudioParticleSphere enabled analyser={audioAnalyser} density={visualSettings.particleDensity} color={'#3a3a3a'} size={320} />
+              </div>
+            )}
             <button
               className={`primary-btn ${isConnected ? 'connected' : ''} ${isConnecting ? 'connecting' : ''}`}
               onClick={() => isConnected ? onDisconnect() : onConnect(localSelectedPreset?.id)}

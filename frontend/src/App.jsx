@@ -38,6 +38,17 @@ function MainApp() {
   const connectionTimeoutRef = useRef(null);
   const [showSettings, setShowSettings] = useState(false);
 
+  // Visual settings
+  const [visualSettings, setVisualSettings] = useState({
+    particleSphere: true,
+    particleDensity: 'medium', // 'low' | 'medium' | 'high'
+  });
+
+  // Audio analyser for particle sphere
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const analyserSourceRef = useRef(null);
+
   // Connection state tracking
   const [connectionState, setConnectionState] = useState({
     tokenGenerated: false,
@@ -217,6 +228,23 @@ function MainApp() {
         log(`Error during cleanup: ${error.message}`);
       }
     }
+    // Cleanup analyser
+    try {
+      if (analyserSourceRef.current) {
+        analyserSourceRef.current.disconnect();
+        analyserSourceRef.current = null;
+      }
+      if (analyserRef.current) {
+        analyserRef.current.disconnect();
+        analyserRef.current = null;
+      }
+      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+        // Keep context for reuse but suspend to save CPU
+        audioCtxRef.current.suspend().catch(() => {});
+      }
+    } catch (e) {
+      console.warn('Analyser cleanup error', e);
+    }
     
     resetConnectionState();
     setIsConnected(false);
@@ -367,6 +395,25 @@ function MainApp() {
             setAudioPlaying(true);
             // Reset audioPlaying when playback ends
             audioElement.onended = () => setAudioPlaying(false);
+
+            // Set up analyser for particle sphere (tap remote track)
+            try {
+              const ctx = audioCtxRef.current || new (window.AudioContext || window.webkitAudioContext)();
+              audioCtxRef.current = ctx;
+              if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+              const stream = new MediaStream([track.mediaStreamTrack]);
+              const source = ctx.createMediaStreamSource(stream);
+              const analyser = ctx.createAnalyser();
+              analyser.fftSize = 1024;
+              analyser.smoothingTimeConstant = 0.85;
+              source.connect(analyser);
+              // Do not connect to destination to avoid duplicating audio
+              analyserRef.current = analyser;
+              analyserSourceRef.current = source;
+            } catch (tapErr) {
+              console.warn('Failed to create analyser for remote audio:', tapErr);
+            }
           }
         } catch (e) {
           console.error('Error handling TrackSubscribed:', e);
@@ -375,6 +422,15 @@ function MainApp() {
       room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
         if (track.kind === 'audio' && participant.identity.includes('agent')) {
           setAudioPlaying(false);
+          // Release analyser resources on unsubscribe
+          if (analyserSourceRef.current) {
+            try { analyserSourceRef.current.disconnect(); } catch {}
+            analyserSourceRef.current = null;
+          }
+          if (analyserRef.current) {
+            try { analyserRef.current.disconnect(); } catch {}
+            analyserRef.current = null;
+          }
         }
       });
       
@@ -562,6 +618,8 @@ function MainApp() {
         livekitToken={livekitToken}
         setLivekitToken={setLivekitToken}
         onGenerateToken={() => generateToken(selectedPreset?.id)}
+        visualSettings={visualSettings}
+        setVisualSettings={setVisualSettings}
       />
     </div>
   );
