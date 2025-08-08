@@ -1616,67 +1616,43 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
     except Exception as e:
         logger.error(f"❌ Failed to add default Graphiti MCP server: {e}", exc_info=True)
     
-    if not mcp_server_ids:
-        logger.info("ℹ️ No additional MCP servers specified in preset")
-        return mcp_servers
-    
     try:
-        # Load MCP servers from the local API instead of hardcoded JSON
-        logger.info("🔄 Loading MCP servers from local API...")
-        
-        # Try to get servers from local MCP API
+        # Load MCP servers from the database manager directly to include auth config
+        logger.info("🔄 Loading MCP servers from database manager...")
         try:
-            import aiohttp
-            async with aiohttp.ClientSession() as session:
-                async with session.get('http://localhost:8082/servers') as response:
-                    if response.status == 200:
-                        api_result = await response.json()
-                        if api_result.get('success'):
-                            # Do NOT inject auth headers by default. The API doesn't return auth info
-                            # and sending bogus headers can break connections.
-                            available_servers = {
-                                server['server_id']: {
-                                    'name': server['name'],
-                                    'server_type': server['server_type'],
-                                    'url': server.get('url'),
-                                    'enabled': server['enabled'],
-                                }
-                                for server in api_result['data']
-                            }
-                            logger.info(f"✅ Loaded {len(available_servers)} servers from API")
-                        else:
-                            raise Exception(f"API returned error: {api_result.get('message')}")
-                    else:
-                        raise Exception(f"API returned status {response.status}")
-        except Exception as api_error:
-            logger.warning(f"⚠️ Failed to load from API ({api_error}), trying database fallback")
+            from config.mcp_config_db import mcp_manager as db_mcp_manager
+            await db_mcp_manager.initialize()
+            db_servers = db_mcp_manager.list_servers()
+            available_servers = {sid: cfg.to_dict() for sid, cfg in db_servers.items()}
+            logger.info(f"✅ Loaded {len(available_servers)} servers from database")
+        except Exception as db_error:
+            logger.warning(f"⚠️ Database load failed ({db_error}), falling back to JSON config file")
+            # Fallback to local config file  
+            config_path = '/app/config/mcp_servers.json'
             try:
-                from config.mcp_config_db import mcp_manager as db_mcp_manager
-                # Ensure DB manager is initialized
-                await db_mcp_manager.initialize()
-                db_servers = db_mcp_manager.list_servers()
-                available_servers = {
-                    sid: cfg.to_dict() for sid, cfg in db_servers.items()
-                }
-                logger.info(f"✅ Loaded {len(available_servers)} servers from database fallback")
-            except Exception as db_error:
-                logger.warning(f"⚠️ Database fallback failed ({db_error}), falling back to config file")
-                # Fallback to local config file  
-                config_path = '/app/config/mcp_servers.json'
-                try:
-                    with open(config_path, 'r') as f:
-                        config = json.load(f)
-                    available_servers = config.get('servers', {})
-                    logger.info(f"✅ Loaded {len(available_servers)} servers from JSON config")
-                except FileNotFoundError:
-                    logger.warning("⚠️ mcp_servers.json not found, no servers loaded from config")
-                    available_servers = {}
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                available_servers = config.get('servers', {})
+                logger.info(f"✅ Loaded {len(available_servers)} servers from JSON config")
+            except FileNotFoundError:
+                logger.warning("⚠️ mcp_servers.json not found, no servers loaded from config")
+                available_servers = {}
         
         logger.info(f"🔍 Looking for MCP servers: {mcp_server_ids}")
         server_names = list(available_servers.keys())
         logger.info(f"🔍 Available MCP servers: {server_names}")
         
-        for server_id in mcp_server_ids:
+        # Determine which servers to load: include all enabled servers to ensure configured MCPs are active
+        enabled_ids = [sid for sid, cfg in available_servers.items() if cfg.get('enabled', False)]
+        # If preset explicitly lists servers, include them as well
+        requested_ids = set(enabled_ids)
+        if mcp_server_ids:
+            if 'all' in [sid.lower() for sid in mcp_server_ids]:
+                requested_ids.update(enabled_ids)
+            else:
+                requested_ids.update(mcp_server_ids)
+
+        for server_id in requested_ids:
             server_config = available_servers.get(server_id)
             if not server_config:
                 logger.warning(f"⚠️ MCP server '{server_id}' not found - available: {server_names}")
@@ -1703,8 +1679,17 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                     # Build headers for authentication
                     headers = {}
                     auth = server_config.get('auth', {})
-                    if auth and auth.get('type') == 'bearer' and auth.get('token'):
-                        headers['Authorization'] = f"Bearer {auth['token']}"
+                    # Support structured auth dicts and dataclass-to-dict shapes
+                    auth_type = (auth.get('type') or '').lower()
+                    token = auth.get('token')
+                    header_name = auth.get('header_name')
+                    header_value = auth.get('header_value')
+                    if auth_type == 'bearer' and token:
+                        headers['Authorization'] = f"Bearer {token}"
+                    elif auth_type == 'api_key' and token:
+                        headers['X-API-Key'] = token
+                    elif auth_type == 'custom_header' and header_name and header_value:
+                        headers[header_name] = header_value
                     
                     logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
                     
