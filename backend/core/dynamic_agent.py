@@ -289,30 +289,36 @@ Memory System Guidelines:
 
         try:
             payload = {"query": query, "max_results": max_facts, "group_ids": ["global"]}
-            # Graphiti Knowledge Server uses /retrieve endpoint
-            resp = requests.post(
-                f"{self.GRAPHITI_API_URL.rstrip('/')}/retrieve",
-                json=payload,
-                timeout=self.memory_search_timeout,
-            )
-            
-            if resp.ok:
-                data = resp.json()
-                if 'facts' in data:
-                    return [fact.get('fact', '') for fact in data['facts'] if fact.get('fact')]
-                elif 'results' in data:
-                    return [str(x) for x in data['results']]
-                elif 'items' in data:
-                    # Some builds return {items: [...]} for retrieve
-                    return [str(x) for x in data['items']]
-                else:
-                    # Handle different response formats
-                    return []
-            else:
-                logger.debug(f"Memory search failed with status {resp.status_code}: {resp.text}")
-                # Fallback to local memory when remote search fails
-                return self._search_local_memory(query=query, max_facts=max_facts)
-            
+            base = self.GRAPHITI_API_URL.rstrip('/')
+            # Try multiple endpoint shapes to accommodate deployments
+            candidates = [
+                ("POST", f"{base}/retrieve", payload),
+                ("POST", f"{base}/api/retrieve", payload),
+                ("GET",  f"{base}/retrieve?query={requests.utils.quote(query)}&max_results={max_facts}", None),
+                ("GET",  f"{base}/api/retrieve?query={requests.utils.quote(query)}&max_results={max_facts}", None),
+            ]
+            for method, url, body in candidates:
+                try:
+                    resp = requests.request(method, url, json=body, timeout=self.memory_search_timeout)
+                except Exception as e:
+                    continue
+                if not resp.ok:
+                    continue
+                try:
+                    data = resp.json()
+                except Exception:
+                    continue
+                if isinstance(data, dict):
+                    if 'facts' in data:
+                        return [fact.get('fact', '') for fact in data['facts'] if fact.get('fact')]
+                    if 'results' in data:
+                        return [str(x) for x in data['results']]
+                    if 'items' in data:
+                        return [str(x) for x in data['items']]
+                if isinstance(data, list):
+                    return [str(x) for x in data][:max_facts]
+            # If nothing worked, fall back to local
+            return self._search_local_memory(query=query, max_facts=max_facts)
         except Exception as e:
             logger.debug(f"Memory search error for '{query}': {e}")
             return self._search_local_memory(query=query, max_facts=max_facts)
@@ -892,12 +898,20 @@ Just ask me naturally and I'll use the right tool to help you! For example:
                 self._emit_memory_event('memory-fallback', "Saved to local session memory (offline)")
                 return
 
-            # Graphiti Knowledge Server uses /ingest endpoint
-            resp = requests.post(
-                f"{self.GRAPHITI_API_URL.rstrip('/')}/ingest",
-                json=payload,
-                timeout=3,
-            )
+            base = self.GRAPHITI_API_URL.rstrip('/')
+            # Try multiple endpoint shapes
+            endpoints = [f"{base}/ingest", f"{base}/api/ingest"]
+            resp = None
+            for url in endpoints:
+                try:
+                    r = requests.post(url, json=payload, timeout=3)
+                except Exception:
+                    continue
+                if r.ok:
+                    resp = r
+                    break
+            if resp is None:
+                raise RuntimeError("All ingest endpoints failed")
             if resp.ok:
                 logger.info(f"[Graphiti] Stored memory via REST: {episode_name}")
                 self.memory_stats['memories_stored'] += 1
@@ -1951,10 +1965,10 @@ async def entrypoint(ctx: JobContext):
         # We can also add a shutdown hook here if needed
         return
 
-    # Handle tools_disabled case
-    if tools_disabled:
-        logger.warning("🔧 Tools disabled for this model - clearing MCP servers")
-        mcp_servers = []
+    # Handle tools_disabled case conservatively: if we have MCP servers configured
+    # (e.g., Graphiti Memory), keep them so the agent can still use tools via MCP.
+    if tools_disabled and not mcp_servers:
+        logger.warning("🔧 Tools disabled for this model and no MCP servers configured")
     elif mcp_servers:
         logger.info("✅ Loaded %s MCP server(s) for preset", len(mcp_servers))
         for i, server in enumerate(mcp_servers):
