@@ -14,7 +14,8 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.orm import selectinload
 
 from .database import get_db_session, MCPServer, ServerStatus, ToolInfo
-from config.mcp_config import MCPServerConfig, MCPServerType, AuthType, AuthConfig
+# IMPORTANT: Use the DB-backed MCP types to avoid Enum mismatches
+from config.mcp_config_db import MCPServerConfig, MCPServerType, AuthType, AuthConfig
 
 
 class DatabaseManager:

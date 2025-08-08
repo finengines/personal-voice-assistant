@@ -523,7 +523,12 @@ async def toggle_server(server_id: str, toggle_data: dict, manager = Depends(get
         
         # Update the server configuration
         config.enabled = enabled
-        success = manager.update_server(server_id, config)
+        # Support both sync and async manager implementations
+        import asyncio
+        if asyncio.iscoroutinefunction(manager.update_server):
+            success = await manager.update_server(server_id, config)
+        else:
+            success = manager.update_server(server_id, config)
         if not success:
             raise HTTPException(status_code=500, detail="Failed to update server")
         
