@@ -20,7 +20,7 @@ def main():
     
     # Set environment variables
     os.environ.setdefault("MCP_API_PORT", "8082")
-    os.environ.setdefault("DEBUG", "true")  # Enable debug mode for development
+    os.environ.setdefault("DEBUG", "false")  # Disable debug mode to fix binding issues
     
     print("🚀 Starting MCP API Server...")
     print(f"📁 Working directory: {backend_dir}")
