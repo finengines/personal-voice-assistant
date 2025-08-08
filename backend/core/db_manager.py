@@ -33,10 +33,11 @@ class DatabaseManager:
     """Database manager for MCP server operations"""
     
     def __init__(self):
-        self._cache: Dict[str, MCPServerConfig] = {}
+        # Use Any in annotations to avoid import-time NameError for MCPServerConfig
+        self._cache: Dict[str, Any] = {}
         self._cache_dirty = True
     
-    async def load_all_servers(self) -> Dict[str, MCPServerConfig]:
+    async def load_all_servers(self) -> Dict[str, Any]:
         """Load all MCP servers from database"""
         if not self._cache_dirty and self._cache:
             return self._cache.copy()
@@ -291,17 +292,18 @@ class DatabaseManager:
             migrated_count = 0
             
             for server_id, server_data in servers.items():
-                # Convert to MCPServerConfig
-                config = MCPServerConfig(
+                # Convert to MCPServerConfig via lazy types
+                _MCPServerConfig, _MCPServerType, _AuthType, _AuthConfig = _get_mcp_types()
+                config = _MCPServerConfig(
                     id=server_id,
                     name=server_data['name'],
                     description=server_data['description'],
-                    server_type=MCPServerType(server_data['server_type']),
+                    server_type=_MCPServerType(server_data['server_type']),
                     url=server_data.get('url'),
                     command=server_data.get('command'),
                     args=server_data.get('args'),
                     env=server_data.get('env'),
-                    auth=self._dict_to_auth(server_data.get('auth')) if server_data.get('auth') else None,
+                    auth=self._dict_to_auth(server_data.get('auth'), _AuthType, _AuthConfig) if server_data.get('auth') else None,
                     enabled=server_data.get('enabled', True),
                     timeout=server_data.get('timeout', 5.0),
                     sse_read_timeout=server_data.get('sse_read_timeout', 300.0),
