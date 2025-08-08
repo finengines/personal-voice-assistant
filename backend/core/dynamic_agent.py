@@ -91,9 +91,9 @@ INTERNAL_MEMORY_ENABLED = False
 class DynamicAgent(Agent):
     """Agent that configures itself based on a preset and includes built-in tools with enhanced memory capabilities"""
     
-    # Graphiti API configuration
-    GRAPHITI_MCP_URL = "https://graphiti.mcp.finproductions.uk/sse"
-    GRAPHITI_API_URL = "https://graphiti.finproductions.uk"
+    # Graphiti API configuration from environment variables
+    GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "").strip()
+    GRAPHITI_API_URL = os.getenv("GRAPHITI_API_URL", "").strip()
 
     @staticmethod
     def _is_placeholder_graphiti_url(url: Optional[str]) -> bool:
@@ -1571,18 +1571,27 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
     mcp_servers = []
     
     # Always add Graphiti MCP server for memory functionality
-    GRAPHITI_MCP_URL = "https://graphiti.mcp.finproductions.uk/sse"
-    try:
-        logger.info(f"🔌 Adding default Graphiti MCP server: {GRAPHITI_MCP_URL}")
-        graphiti_server = mcp.MCPServerHTTP(
-            url=GRAPHITI_MCP_URL, 
-            timeout=10.0,  # Reduced timeout
-            sse_read_timeout=60.0,  # Reduced from 120
-        )
-        mcp_servers.append(graphiti_server)
-        logger.info(f"✅ Added default Graphiti MCP server: {GRAPHITI_MCP_URL}")
-    except Exception as e:
-        logger.warning(f"⚠️ Failed to add default Graphiti MCP server: {e}")
+    graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "").strip()
+    if not graphiti_mcp_url:
+        # Derive from API URL if MCP URL not set
+        graphiti_api_url = os.getenv("GRAPHITI_API_URL", "").strip()
+        if graphiti_api_url:
+            graphiti_mcp_url = graphiti_api_url.rstrip("/") + "/sse"
+    
+    if graphiti_mcp_url:
+        try:
+            logger.info(f"🔌 Adding default Graphiti MCP server: {graphiti_mcp_url}")
+            graphiti_server = mcp.MCPServerHTTP(
+                url=graphiti_mcp_url, 
+                timeout=10.0,  # Reduced timeout
+                sse_read_timeout=60.0,  # Reduced from 120
+            )
+            mcp_servers.append(graphiti_server)
+            logger.info(f"✅ Added default Graphiti MCP server: {graphiti_mcp_url}")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to add default Graphiti MCP server: {e}")
+    else:
+        logger.warning("⚠️ No GRAPHITI_MCP_URL or GRAPHITI_API_URL configured, skipping Graphiti MCP server")
     
     try:
         # Load MCP servers from the database manager directly to include auth config
