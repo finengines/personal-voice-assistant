@@ -1557,12 +1557,11 @@ async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServ
                                     
                                     logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
                                     
-                                    # Create LiveKit MCP server (exactly like private repo)
-                        # LiveKit example-aligned construction: keep simple; headers only when present
-                        server = mcp.MCPServerHTTP(
-                            url=url,
-                            headers=headers if headers else None,
-                        )
+                                    # Create LiveKit MCP server (example-aligned)
+                                    server = mcp.MCPServerHTTP(
+                                        url=url,
+                                        headers=headers if headers else None,
+                                    )
                                     mcp_servers.append(server)
                                     added += 1
                                     logger.info(f"✅ Added MCP server: {server_config.get('name', server_id)} ({url})")
@@ -1590,9 +1589,6 @@ async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServ
                                     server = mcp.MCPServerHTTP(
                                         url=url,
                                         headers=headers if headers else None,
-                                        timeout=20.0,
-                                        sse_read_timeout=300.0,
-                                        client_session_timeout_seconds=90.0,
                                     )
                                     mcp_servers.append(server)
                                     added += 1
