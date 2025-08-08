@@ -1642,17 +1642,7 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
         server_names = list(available_servers.keys())
         logger.info(f"🔍 Available MCP servers: {server_names}")
         
-        # Determine which servers to load: include all enabled servers to ensure configured MCPs are active
-        enabled_ids = [sid for sid, cfg in available_servers.items() if cfg.get('enabled', False)]
-        # If preset explicitly lists servers, include them as well
-        requested_ids = set(enabled_ids)
-        if mcp_server_ids:
-            if 'all' in [sid.lower() for sid in mcp_server_ids]:
-                requested_ids.update(enabled_ids)
-            else:
-                requested_ids.update(mcp_server_ids)
-
-        for server_id in requested_ids:
+        for server_id in mcp_server_ids:
             server_config = available_servers.get(server_id)
             if not server_config:
                 logger.warning(f"⚠️ MCP server '{server_id}' not found - available: {server_names}")
@@ -1679,17 +1669,8 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                     # Build headers for authentication
                     headers = {}
                     auth = server_config.get('auth', {})
-                    # Support structured auth dicts and dataclass-to-dict shapes
-                    auth_type = (auth.get('type') or '').lower()
-                    token = auth.get('token')
-                    header_name = auth.get('header_name')
-                    header_value = auth.get('header_value')
-                    if auth_type == 'bearer' and token:
-                        headers['Authorization'] = f"Bearer {token}"
-                    elif auth_type == 'api_key' and token:
-                        headers['X-API-Key'] = token
-                    elif auth_type == 'custom_header' and header_name and header_value:
-                        headers[header_name] = header_value
+                    if auth and auth.get('type') == 'bearer' and auth.get('token'):
+                        headers['Authorization'] = f"Bearer {auth['token']}"
                     
                     logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
                     
