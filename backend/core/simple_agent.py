@@ -76,6 +76,7 @@ async def entrypoint(ctx: JobContext):
     # ------------------------------------------------------------------
     # 3. Load MCP servers
     # ------------------------------------------------------------------
+    logger.info(f"🔍 Preset '{preset.name}' has mcp_server_ids: {preset.mcp_server_ids}")
     mcp_servers = await load_mcp_servers_for_preset(preset.mcp_server_ids)
     if mcp_servers:
         logger.info("✅ Loaded %s MCP server(s)", len(mcp_servers))
@@ -121,7 +122,7 @@ async def entrypoint(ctx: JobContext):
     
     # Create the agent using the preset configuration
     from core.dynamic_agent import DynamicAgent
-    agent = DynamicAgent(preset, ctx_room=ctx.room)
+    agent = DynamicAgent(preset)
 
     # CRITICAL: Connect to the room context BEFORE starting the session
     logger.info("🔌 Connecting to room context...")
