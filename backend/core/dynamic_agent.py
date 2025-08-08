@@ -1645,22 +1645,11 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                     logger.warning(f"⚠️ No URL for server '{server_id}', skipping")
                     continue
                 
-                # Substitute environment variables in URL like ${ENV}
-                if isinstance(url, str) and url.startswith('${') and url.endswith('}'):
-                    env_var = url[2:-1]
-                    url = os.getenv(env_var, '')
-                    logger.info(f"🔧 Substituted environment variable {env_var} in URL for server '{server_id}': {url}")
-
-                # Build headers for authentication (bearer/api_key/custom_header)
+                # Build headers for authentication (bearer only, as in private repo)
                 headers = {}
-                auth = server_config.get('auth', {}) or {}
-                auth_type = (auth.get('type') or '').lower()
-                if auth_type == 'bearer' and auth.get('token'):
+                auth = server_config.get('auth', {})
+                if auth and auth.get('type') == 'bearer' and auth.get('token'):
                     headers['Authorization'] = f"Bearer {auth['token']}"
-                elif auth_type == 'api_key' and auth.get('token'):
-                    headers['X-API-Key'] = auth['token']
-                elif auth_type == 'custom_header' and auth.get('header_name') and auth.get('header_value'):
-                    headers[auth['header_name']] = auth['header_value']
 
                 logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
                 
@@ -1668,9 +1657,9 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                 server = mcp.MCPServerHTTP(
                     url=url,
                     headers=headers if headers else None,
-                    timeout=15.0,  # Reasonable connection timeout
-                    sse_read_timeout=90.0,  # Reasonable read timeout
-                    client_session_timeout_seconds=30.0,  # Reasonable session timeout
+                    timeout=15.0,
+                    sse_read_timeout=90.0,
+                    client_session_timeout_seconds=30.0,
                 )
                 mcp_servers.append(server)
                 logger.info(f"✅ Added MCP server: {server_config.get('name', server_id)} ({url})")
