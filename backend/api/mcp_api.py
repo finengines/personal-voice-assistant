@@ -709,14 +709,17 @@ async def memory_status():
                 graphiti_mcp_url = "https://your-graphiti-instance.com/sse"
         status_data["graphiti_mcp"]["url"] = graphiti_mcp_url
         try:
-            # Prefer probing the SSE endpoint directly (should return 200 OK on GET)
-            resp = requests.get(graphiti_mcp_url, timeout=3)
-            if resp.ok:
-                status_data["graphiti_mcp"]["status"] = "connected"
+            # Probe SSE endpoint without reading the body to avoid read timeouts
+            resp = requests.get(graphiti_mcp_url, headers={"Accept": "text/event-stream"}, stream=True, timeout=(3, 1))
+            if getattr(resp, 'status_code', None):
+                if 200 <= resp.status_code < 300:
+                    status_data["graphiti_mcp"]["status"] = "connected"
+                else:
+                    # Fallback: try a conventional healthcheck adjacent to /sse
+                    resp2 = requests.get(graphiti_mcp_url.rstrip('/sse') + '/healthcheck', timeout=3)
+                    status_data["graphiti_mcp"]["status"] = "connected" if resp2.ok else f"error_{resp2.status_code}"
             else:
-                # Fallback: try a conventional healthcheck adjacent to /sse
-                resp2 = requests.get(graphiti_mcp_url.rstrip('/sse') + '/healthcheck', timeout=3)
-                status_data["graphiti_mcp"]["status"] = "connected" if resp2.ok else f"error_{resp2.status_code}"
+                status_data["graphiti_mcp"]["status"] = "failed_no_status"
         except Exception as e:
             status_data["graphiti_mcp"]["status"] = f"failed_{str(e)[:50]}"
         

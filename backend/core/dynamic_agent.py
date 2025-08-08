@@ -1695,17 +1695,14 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
             logger.info(f"✅ Added default Graphiti MCP server: {graphiti_mcp_url}")
             logger.info(f"📊 Total MCP servers after Graphiti addition: {len(mcp_servers)}")
             
-            # Test connectivity
+            # Best-effort connectivity check without blocking on SSE stream
             try:
-                # This will attempt to connect and list tools
-                tools = await graphiti_server.list_tools()
-                logger.info(f"🔧 Graphiti MCP server has {len(tools) if tools else 0} tools available")
-                if tools:
-                    for tool in tools[:3]:  # Log first 3 tools
-                        tool_name = getattr(tool, 'name', str(tool))
-                        logger.info(f"  - Tool: {tool_name}")
+                import aiohttp
+                async with aiohttp.ClientSession() as _sess:
+                    async with _sess.get(graphiti_mcp_url, headers={"Accept": "text/event-stream"}) as resp:
+                        logger.info(f"🔧 Graphiti MCP probe status: {resp.status}")
             except Exception as test_e:
-                logger.warning(f"⚠️ Graphiti MCP server added but connection test failed: {test_e}")
+                logger.warning(f"⚠️ Graphiti MCP probe failed: {test_e}")
     except Exception as e:
         logger.error(f"❌ Failed to add default Graphiti MCP server: {e}", exc_info=True)
     
