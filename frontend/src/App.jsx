@@ -607,6 +607,8 @@ function MainApp() {
       {currentView==='voice' && <MinimalVoiceAgent
           {...voiceProps}
           onOpenSettings={() => setShowSettings(true)}
+          visualSettings={visualSettings}
+          audioAnalyser={analyserRef.current}
         />}
       {currentView!=='voice' && <>{currentView==='mcp' && <MCPManagement/>}{currentView==='presets' && <AgentPresets/>}{currentView==='apikeys' && <APIKeyManagement/>}{currentView==='globalsettings' && <GlobalSettings/>}</>}
       <BottomNav />

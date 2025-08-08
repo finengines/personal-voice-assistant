@@ -125,6 +125,11 @@
   position: relative;
 }
 
+/* Ensure particle sphere sits behind the button */
+.connection-container > div canvas {
+  filter: blur(0.0px);
+}
+
 .primary-btn {
   width: 150px;
   height: 150px;
