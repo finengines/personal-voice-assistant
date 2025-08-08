@@ -1482,59 +1482,100 @@ async def load_vad_model(ctx: JobContext):
         return None
 
 async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServer]:
-    """Load MCP servers using simple pattern matching LiveKit examples"""
+    """Load MCP servers exactly like working private repo with auth support"""
     mcp_servers = []
     
-    # 1. Always add Graphiti MCP server for memory (like Zapier example pattern)
+    # Always add Graphiti MCP server for memory functionality (using environment variable)
     GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "").strip()
     if GRAPHITI_MCP_URL:
-        logger.info(f"Adding Graphiti MCP server at {GRAPHITI_MCP_URL}")
-        mcp_servers.append(mcp.MCPServerHTTP(url=GRAPHITI_MCP_URL))
-        logger.info(f"✅ Added Graphiti MCP server")
+        try:
+            logger.info(f"🔌 Adding Graphiti MCP server: {GRAPHITI_MCP_URL}")
+            graphiti_server = mcp.MCPServerHTTP(
+                url=GRAPHITI_MCP_URL, 
+                timeout=10.0,  # Match private repo settings
+                sse_read_timeout=60.0,  # Match private repo settings
+            )
+            mcp_servers.append(graphiti_server)
+            logger.info(f"✅ Added Graphiti MCP server: {GRAPHITI_MCP_URL}")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to add Graphiti MCP server: {e}")
     else:
-        logger.warning("GRAPHITI_MCP_URL environment variable not set. Memory integration disabled.")
+        logger.warning("⚠️ GRAPHITI_MCP_URL environment variable not set - memory functionality disabled")
     
-    # 2. Add additional MCP servers from database (if any)
     if not mcp_server_ids:
-        logger.info("No additional MCP servers specified in preset")
+        logger.info("ℹ️ No additional MCP servers specified in preset")
         return mcp_servers
     
     try:
-        # Simple API call to get server configs
+        # Load MCP servers from the local API (exactly like private repo)
+        logger.info("🔄 Loading MCP servers from local API...")
+        
         import aiohttp
         async with aiohttp.ClientSession() as session:
             async with session.get('http://localhost:8082/servers') as response:
                 if response.status == 200:
-                    result = await response.json()
-                    if result.get('success'):
-                        servers_data = result['data']
+                    api_result = await response.json()
+                    if api_result.get('success'):
+                        available_servers = {server['server_id']: {
+                            'name': server['name'],
+                            'server_type': server['server_type'],
+                            'url': server.get('url'),
+                            'enabled': server['enabled'],
+                            'auth': server.get('auth')  # Include auth from database
+                        } for server in api_result['data']}
+                        logger.info(f"✅ Loaded {len(available_servers)} servers from API")
                         
-                        # Process each requested server ID
+                        # Load only the servers specified in the preset
                         for server_id in mcp_server_ids:
-                            # Find server in database
-                            server_config = None
-                            for s in servers_data:
-                                if s['server_id'] == server_id and s['enabled']:
-                                    server_config = s
-                                    break
-                            
-                            if not server_config:
-                                logger.warning(f"MCP server '{server_id}' not found or disabled")
+                            if server_id not in available_servers:
+                                logger.warning(f"⚠️ MCP server '{server_id}' not found in available servers")
+                                continue
+                                
+                            server_config = available_servers[server_id]
+                            if not server_config.get('enabled', True):
+                                logger.info(f"ℹ️ MCP server '{server_id}' is disabled, skipping")
                                 continue
                             
-                            # Create MCP server (simple pattern like examples)
-                            url = server_config.get('url')
-                            if url:
-                                logger.info(f"Adding MCP server {server_config['name']} at {url}")
-                                mcp_servers.append(mcp.MCPServerHTTP(url=url))
-                                logger.info(f"✅ Added MCP server: {server_config['name']}")
+                            server_type = server_config.get('server_type', 'sse')
+                            
+                            if server_type == 'sse':
+                                try:
+                                    url = server_config.get('url')
+                                    if not url:
+                                        logger.warning(f"⚠️ No URL configured for SSE server '{server_id}'")
+                                        continue
+                                    
+                                    # Setup authentication headers if provided (like private repo)
+                                    headers = {}
+                                    auth = server_config.get('auth', {})
+                                    if auth and auth.get('type') == 'bearer' and auth.get('token'):
+                                        headers['Authorization'] = f"Bearer {auth['token']}"
+                                    
+                                    logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
+                                    
+                                    # Create LiveKit MCP server (exactly like private repo)
+                                    server = mcp.MCPServerHTTP(
+                                        url=url,
+                                        headers=headers if headers else None,
+                                        timeout=15.0,  # Reasonable connection timeout
+                                        sse_read_timeout=90.0,  # Reasonable read timeout
+                                        client_session_timeout_seconds=30.0,  # Reasonable session timeout
+                                    )
+                                    mcp_servers.append(server)
+                                    logger.info(f"✅ Added MCP server: {server_config.get('name', server_id)} ({url})")
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Failed to create MCP server '{server_id}': {e}")
                             else:
-                                logger.warning(f"No URL for MCP server '{server_id}'")
-                                
+                                logger.warning(f"⚠️ Server type '{server_type}' not supported for '{server_id}'")
+                    else:
+                        raise Exception(f"API returned error: {api_result.get('message')}")
+                else:
+                    raise Exception(f"API returned status {response.status}")
+                    
     except Exception as e:
-        logger.warning(f"Could not load MCP servers from database: {e}")
+        logger.warning(f"⚠️ Could not load MCP servers from API: {e}")
     
-    logger.info(f"Total MCP servers loaded: {len(mcp_servers)}")
+    logger.info(f"🎯 Total MCP servers loaded: {len(mcp_servers)}")
     return mcp_servers
 
 async def load_mcp_servers_for_preset_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServer]:
