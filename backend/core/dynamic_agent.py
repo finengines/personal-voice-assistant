@@ -1593,8 +1593,8 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
             logger.info(f"🔌 Adding default Graphiti MCP server: {graphiti_mcp_url}")
             graphiti_server = mcp.MCPServerHTTP(
                 url=graphiti_mcp_url, 
-                timeout=10.0,  # Reduced timeout
-                sse_read_timeout=60.0,  # Reduced from 120
+                timeout=30.0,
+                sse_read_timeout=300.0,
             )
             # Ensure server is initialized so tool discovery works reliably
             try:
@@ -1674,19 +1674,19 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                     
                     logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
                     
-                    # Create LiveKit MCP server with reasonable timeouts
+                    # Create LiveKit MCP server with robust SSE timeouts
                     server = mcp.MCPServerHTTP(
                         url=url,
                         headers=headers if headers else None,
-                        timeout=15.0,  # Reasonable connection timeout
-                        sse_read_timeout=90.0,  # Reasonable read timeout
-                        client_session_timeout_seconds=30.0,  # Reasonable session timeout
+                        timeout=30.0,  # Connection timeout
+                        sse_read_timeout=300.0,  # SSE stream can be idle for long periods
+                        client_session_timeout_seconds=120.0,  # Keep client session alive longer
                     )
-                    # Initialize so the session can consume tools immediately
+                    # Initialize; tolerate initial SSE idle/read timeouts
                     try:
                         await server.initialize()
                     except Exception as init_e:
-                        logger.warning(f"⚠️ Failed to initialize MCP server '{server_id}': {init_e}")
+                        logger.warning(f"⚠️ Initialize warning for MCP server '{server_id}': {init_e}")
                     mcp_servers.append(server)
                     logger.info(f"✅ Added MCP server: {server_config.get('name', server_id)} ({url})")
                 except Exception as e:
