@@ -125,39 +125,12 @@
   position: relative;
 }
 
-.primary-btn {
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.3s ease;
-  background-color: transparent;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+/* Ensure particle sphere sits behind the button */
+.connection-container > div canvas {
+  filter: blur(0.0px);
 }
 
-.primary-btn.connected {
-  border-color: transparent;
-  background-color: #fff;
-}
-
-.primary-btn.disconnected {
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.primary-btn.connecting {
-  border-color: var(--color-warning);
-  cursor: not-allowed;
-  background-color: transparent;
-}
-
-.primary-btn:hover:not(:disabled) {
-  transform: scale(1.05);
-  border-color: rgba(255, 255, 255, 0.8);
-}
+/* Remove the big central button styles */
 
 .connection-pulse {
   position: absolute;

@@ -17,8 +17,11 @@ from pathlib import Path
 from livekit.agents.llm import mcp
 from livekit.agents.llm.tool_context import function_tool, ToolError
 
-from core.database import init_db, health_check
-from core.db_manager import db_manager
+# Delay heavy imports to avoid circular import during module import
+def _lazy_db_stuff():
+    from core.database import init_db, health_check
+    from core.db_manager import db_manager
+    return init_db, health_check, db_manager
 
 
 class MCPServerType(Enum):
@@ -136,6 +139,7 @@ class OpenAIToolsServer:
                     tools = await response.json()
                     # Cache tools and save to database
                     for tool in tools:
+                        _init_db, _health_check, db_manager = _lazy_db_stuff()
                         await db_manager.save_tool_info(
                             self.config.id,
                             tool.get('name', ''),
@@ -201,7 +205,8 @@ class MCPServerManager:
         if self._initialized:
             return
         
-        # Initialize database
+        # Initialize database (lazy to avoid circular at import time)
+        init_db, health_check, _db_manager = _lazy_db_stuff()
         await init_db()
         
         # Check database health
@@ -215,6 +220,7 @@ class MCPServerManager:
     async def load_config(self):
         """Load server configurations from database"""
         try:
+            _init_db, _health_check, db_manager = _lazy_db_stuff()
             self.servers = await db_manager.load_all_servers()
         except Exception as e:
             print(f"Error loading MCP config from database: {e}")
@@ -228,6 +234,7 @@ class MCPServerManager:
     async def add_server(self, config: MCPServerConfig) -> bool:
         """Add a new server configuration"""
         try:
+            _init_db, _health_check, db_manager = _lazy_db_stuff()
             success = await db_manager.save_server(config)
             if success:
                 self.servers[config.id] = config
@@ -243,6 +250,7 @@ class MCPServerManager:
             if server_id in self.active_servers:
                 await self.stop_server(server_id)
             
+            _init_db, _health_check, db_manager = _lazy_db_stuff()
             success = await db_manager.delete_server(server_id)
             if success and server_id in self.servers:
                 del self.servers[server_id]
@@ -254,6 +262,7 @@ class MCPServerManager:
     async def update_server(self, server_id: str, config: MCPServerConfig) -> bool:
         """Update a server configuration"""
         try:
+            _init_db, _health_check, db_manager = _lazy_db_stuff()
             success = await db_manager.save_server(config)
             if success:
                 self.servers[server_id] = config
@@ -325,12 +334,14 @@ class MCPServerManager:
                 return False
             
             # Update status in database
+            _init_db, _health_check, db_manager = _lazy_db_stuff()
             await db_manager.update_server_status(server_id, True)
             print(f"Started MCP server: {config.name}")
             return True
             
         except Exception as e:
             print(f"Error starting server {server_id}: {e}")
+            _init_db, _health_check, db_manager = _lazy_db_stuff()
             await db_manager.update_server_status(server_id, False, str(e))
             return False
     
@@ -347,6 +358,7 @@ class MCPServerManager:
             del self.active_servers[server_id]
             
             # Update status in database
+            _init_db, _health_check, db_manager = _lazy_db_stuff()
             await db_manager.update_server_status(server_id, False)
             print(f"Stopped server {server_id}")
             return True
@@ -401,6 +413,7 @@ class MCPServerManager:
         """Get status of all servers"""
         status = {}
         
+        _init_db, _health_check, db_manager = _lazy_db_stuff()
         for server_id, config in self.servers.items():
             db_status = await db_manager.get_server_status(server_id)
             status[server_id] = {

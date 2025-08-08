@@ -6,6 +6,7 @@ FastAPI endpoints for managing MCP server configurations.
 """
 
 import os
+from dotenv import load_dotenv
 import asyncio
 from typing import Dict, List, Optional, Any
 from contextlib import asynccontextmanager
@@ -14,26 +15,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 
+USE_DATABASE = True
 try:
+    # Prefer the DB-backed configuration manager
     from config.mcp_config_db import (
         mcp_manager,
         MCPServerConfig,
         MCPServerType,
         AuthType,
-        AuthConfig
+        AuthConfig,
     )
-    USE_DATABASE = True
-except ImportError as e:
-    print(f"Warning: Database MCP config not available: {e}")
-    print("Falling back to JSON file configuration")
-    USE_DATABASE = False
-    from config.mcp_config import (
-        mcp_manager,
-        MCPServerConfig,
-        MCPServerType,
-        AuthType,
-        AuthConfig
-    )
+except Exception as e:
+    # Hard fail here to avoid silent fallback. The system should use DB mode.
+    # Log a clear message and re-raise so deployment surfaces the issue.
+    print("Fatal: Failed to import config.mcp_config_db (DB mode)")
+    print(e)
+    raise
 
 # Pydantic models for API
 class AuthConfigAPI(BaseModel):
@@ -89,6 +86,43 @@ async def lifespan(app: FastAPI):
     try:
         # Initialize and load configuration
         await mcp_manager.initialize()
+
+        # Auto-register Graphiti MCP server from environment if present and not already configured
+        try:
+            graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "").strip()
+            if (not graphiti_mcp_url) or ("your-graphiti-instance.com" in graphiti_mcp_url):
+                graphiti_api_url = os.getenv("GRAPHITI_API_URL", "").strip()
+                if graphiti_api_url and "your-graphiti-instance.com" not in graphiti_api_url:
+                    graphiti_mcp_url = graphiti_api_url.rstrip("/") + "/sse"
+
+            if graphiti_mcp_url and "your-graphiti-instance.com" not in graphiti_mcp_url:
+                # Avoid duplicates
+                existing = mcp_manager.get_server("graphiti-memory")
+                if not existing:
+                    cfg = MCPServerConfig(
+                        id="graphiti-memory",
+                        name="Graphiti Memory",
+                        description="Graphiti knowledge base and memory system",
+                        server_type=MCPServerType.SSE,
+                        url=graphiti_mcp_url,
+                        auth=None,
+                        enabled=True,
+                        timeout=10.0,
+                        sse_read_timeout=60.0,
+                    )
+                    try:
+                        await mcp_manager.add_server(cfg)
+                        print(f"✅ Auto-registered Graphiti MCP server from env: {graphiti_mcp_url}")
+                    except Exception as e:
+                        print(f"⚠️  Failed to auto-register Graphiti MCP server: {e}")
+            else:
+                if not graphiti_mcp_url:
+                    print("ℹ️  GRAPHITI_MCP_URL not set (and no usable GRAPHITI_API_URL); skipping auto-registration")
+                else:
+                    print("ℹ️  Graphiti URL uses placeholder; skipping auto-registration")
+        except Exception as e:
+            print(f"⚠️  Error in Graphiti auto-registration: {e}")
+
         # Start all enabled servers
         await mcp_manager.start_all_enabled_servers()
         print("✅ MCP API server started successfully")
@@ -102,6 +136,9 @@ async def lifespan(app: FastAPI):
     print("🛑 Shutting down MCP API server...")
     await mcp_manager.stop_all_servers()
     print("✅ MCP API server shutdown complete")
+
+# Load environment variables from .env when running outside Docker
+load_dotenv()
 
 # Create FastAPI app with lifespan
 app = FastAPI(
@@ -140,8 +177,32 @@ except ImportError as e:
 
 # Dependency to ensure MCP manager is loaded
 async def get_mcp_manager():
-    if not mcp_manager._initialized:
-        await mcp_manager.initialize()
+    """Return a ready MCP manager for both DB-backed and file-backed modes.
+
+    - DB mode (config.mcp_config_db): has `_initialized` and async `initialize()`
+    - File mode (config.mcp_config): no `_initialized`; exposes `load_config()`
+    """
+    # Try DB-backed initialize if available, otherwise fall back to JSON loader
+    import asyncio
+    if hasattr(mcp_manager, "initialize"):
+        try:
+            if asyncio.iscoroutinefunction(mcp_manager.initialize):
+                await mcp_manager.initialize()
+            else:
+                mcp_manager.initialize()  # type: ignore[attr-defined]
+            return mcp_manager
+        except Exception:
+            # fall through to JSON config
+            pass
+    # File/alt manager – ensure config is loaded (sync or async)
+    if hasattr(mcp_manager, "load_config"):
+        try:
+            if asyncio.iscoroutinefunction(mcp_manager.load_config):
+                await mcp_manager.load_config()  # type: ignore[attr-defined]
+            else:
+                mcp_manager.load_config()  # type: ignore[attr-defined]
+        except Exception:
+            pass
     return mcp_manager
 
 # API Endpoints
@@ -519,7 +580,12 @@ async def toggle_server(server_id: str, toggle_data: dict, manager = Depends(get
         
         # Update the server configuration
         config.enabled = enabled
-        success = manager.update_server(server_id, config)
+        # Support both sync and async manager implementations
+        import asyncio
+        if asyncio.iscoroutinefunction(manager.update_server):
+            success = await manager.update_server(server_id, config)
+        else:
+            success = manager.update_server(server_id, config)
         if not success:
             raise HTTPException(status_code=500, detail="Failed to update server")
         
@@ -622,10 +688,10 @@ async def memory_status():
         }
         
         # Check Graphiti API
-        graphiti_api_url = os.getenv("GRAPHITI_API_URL", "https://your-graphiti-instance.com")
+        graphiti_api_url = os.getenv("GRAPHITI_API_URL", "").strip() or "https://your-graphiti-instance.com"
         status_data["graphiti_api"]["url"] = graphiti_api_url
         try:
-            resp = requests.get(f"{graphiti_api_url}/healthcheck", timeout=3)
+            resp = requests.get(f"{graphiti_api_url.rstrip('/')}/healthcheck", timeout=3)
             if resp.ok:
                 status_data["graphiti_api"]["status"] = "connected"
             else:
@@ -633,20 +699,32 @@ async def memory_status():
         except Exception as e:
             status_data["graphiti_api"]["status"] = f"failed_{str(e)[:50]}"
         
-        # Check Graphiti MCP
-        graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
+        # Check Graphiti MCP (derive from API URL when MCP not explicitly set)
+        graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "").strip()
+        if (not graphiti_mcp_url) or ("your-graphiti-instance.com" in graphiti_mcp_url):
+            api_base_for_mcp = os.getenv("GRAPHITI_API_URL", "").strip()
+            if api_base_for_mcp and "your-graphiti-instance.com" not in api_base_for_mcp:
+                graphiti_mcp_url = api_base_for_mcp.rstrip('/') + "/sse"
+            else:
+                graphiti_mcp_url = "https://your-graphiti-instance.com/sse"
         status_data["graphiti_mcp"]["url"] = graphiti_mcp_url
         try:
-            resp = requests.get(graphiti_mcp_url.replace('/sse', '/healthcheck'), timeout=3)
-            if resp.ok:
-                status_data["graphiti_mcp"]["status"] = "connected"
+            # Probe SSE endpoint without reading the body to avoid read timeouts
+            resp = requests.get(graphiti_mcp_url, headers={"Accept": "text/event-stream"}, stream=True, timeout=(3, 1))
+            if getattr(resp, 'status_code', None):
+                if 200 <= resp.status_code < 300:
+                    status_data["graphiti_mcp"]["status"] = "connected"
+                else:
+                    # Fallback: try a conventional healthcheck adjacent to /sse
+                    resp2 = requests.get(graphiti_mcp_url.rstrip('/sse') + '/healthcheck', timeout=3)
+                    status_data["graphiti_mcp"]["status"] = "connected" if resp2.ok else f"error_{resp2.status_code}"
             else:
-                status_data["graphiti_mcp"]["status"] = f"error_{resp.status_code}"
+                status_data["graphiti_mcp"]["status"] = "failed_no_status"
         except Exception as e:
             status_data["graphiti_mcp"]["status"] = f"failed_{str(e)[:50]}"
         
         # Check MCP servers
-        manager = get_mcp_manager()
+        manager = await get_mcp_manager()
         if hasattr(manager, 'active_servers'):
             for server_id, server in manager.active_servers.items():
                 server_info = {

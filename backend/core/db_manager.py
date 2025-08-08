@@ -7,24 +7,37 @@ replacing the JSON file storage with PostgreSQL persistence.
 """
 
 import asyncio
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any  # noqa: F401
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from sqlalchemy.orm import selectinload
 
 from .database import get_db_session, MCPServer, ServerStatus, ToolInfo
-from config.mcp_config import MCPServerConfig, MCPServerType, AuthType, AuthConfig
+from typing import Any, Dict, Optional, List
+
+# Lazy import to avoid circular dependency between
+# config.mcp_config_db -> core.db_manager -> config.mcp_config_db
+def _get_mcp_types():
+    from importlib import import_module
+    mod = import_module('config.mcp_config_db')
+    return (
+        getattr(mod, 'MCPServerConfig'),
+        getattr(mod, 'MCPServerType'),
+        getattr(mod, 'AuthType'),
+        getattr(mod, 'AuthConfig'),
+    )
 
 
 class DatabaseManager:
     """Database manager for MCP server operations"""
     
     def __init__(self):
-        self._cache: Dict[str, MCPServerConfig] = {}
+        # Use Any in annotations to avoid import-time NameError for MCPServerConfig
+        self._cache: Dict[str, Any] = {}
         self._cache_dirty = True
     
-    async def load_all_servers(self) -> Dict[str, MCPServerConfig]:
+    async def load_all_servers(self) -> Dict[str, Any]:
         """Load all MCP servers from database"""
         if not self._cache_dirty and self._cache:
             return self._cache.copy()
@@ -33,16 +46,17 @@ class DatabaseManager:
             result = await session.execute(select(MCPServer))
             db_servers = result.scalars().all()
             
-            servers = {}
+            servers: Dict[str, Any] = {}
             for db_server in db_servers:
-                config = self._db_to_config(db_server)
+                _MCPServerConfig, _MCPServerType, _AuthType, _AuthConfig = _get_mcp_types()
+                config = self._db_to_config(db_server, _MCPServerConfig, _MCPServerType, _AuthType, _AuthConfig)
                 servers[config.id] = config
             
             self._cache = servers
             self._cache_dirty = False
             return servers
     
-    async def save_server(self, config: MCPServerConfig) -> bool:
+    async def save_server(self, config: Any) -> bool:
         """Save MCP server configuration to database"""
         try:
             async with get_db_session() as session:
@@ -129,7 +143,7 @@ class DatabaseManager:
             print(f"Error deleting server {server_id}: {e}")
             return False
     
-    async def get_server(self, server_id: str) -> Optional[MCPServerConfig]:
+    async def get_server(self, server_id: str) -> Optional[Any]:
         """Get specific MCP server configuration"""
         servers = await self.load_all_servers()
         return servers.get(server_id)
@@ -278,17 +292,18 @@ class DatabaseManager:
             migrated_count = 0
             
             for server_id, server_data in servers.items():
-                # Convert to MCPServerConfig
-                config = MCPServerConfig(
+                # Convert to MCPServerConfig via lazy types
+                _MCPServerConfig, _MCPServerType, _AuthType, _AuthConfig = _get_mcp_types()
+                config = _MCPServerConfig(
                     id=server_id,
                     name=server_data['name'],
                     description=server_data['description'],
-                    server_type=MCPServerType(server_data['server_type']),
+                    server_type=_MCPServerType(server_data['server_type']),
                     url=server_data.get('url'),
                     command=server_data.get('command'),
                     args=server_data.get('args'),
                     env=server_data.get('env'),
-                    auth=self._dict_to_auth(server_data.get('auth')) if server_data.get('auth') else None,
+                    auth=self._dict_to_auth(server_data.get('auth'), _AuthType, _AuthConfig) if server_data.get('auth') else None,
                     enabled=server_data.get('enabled', True),
                     timeout=server_data.get('timeout', 5.0),
                     sse_read_timeout=server_data.get('sse_read_timeout', 300.0),
@@ -306,7 +321,7 @@ class DatabaseManager:
             print(f"Error migrating from JSON: {e}")
             return False
     
-    def _db_to_config(self, db_server: MCPServer) -> MCPServerConfig:
+    def _db_to_config(self, db_server: MCPServer, MCPServerConfig, MCPServerType, AuthType, AuthConfig):
         """Convert database model to MCPServerConfig"""
         return MCPServerConfig(
             id=db_server.id,
@@ -317,7 +332,7 @@ class DatabaseManager:
             command=db_server.command,
             args=db_server.args,
             env=db_server.env,
-            auth=self._dict_to_auth(db_server.auth) if db_server.auth else None,
+            auth=self._dict_to_auth(db_server.auth, AuthType, AuthConfig) if db_server.auth else None,
             enabled=db_server.enabled,
             timeout=db_server.timeout,
             sse_read_timeout=db_server.sse_read_timeout,
@@ -325,7 +340,7 @@ class DatabaseManager:
             health_check_interval=db_server.health_check_interval
         )
     
-    def _auth_to_dict(self, auth: AuthConfig) -> Dict[str, Any]:
+    def _auth_to_dict(self, auth: Any) -> Dict[str, Any]:
         """Convert AuthConfig to dictionary"""
         if not auth:
             return None
@@ -339,7 +354,7 @@ class DatabaseManager:
             "header_value": auth.header_value
         }
     
-    def _dict_to_auth(self, auth_dict: Dict[str, Any]) -> AuthConfig:
+    def _dict_to_auth(self, auth_dict: Dict[str, Any], AuthType, AuthConfig):
         """Convert dictionary to AuthConfig"""
         if not auth_dict:
             return None
