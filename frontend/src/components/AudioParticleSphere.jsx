@@ -111,12 +111,12 @@ const AudioParticleSphere = ({
 
         // Perspective projection (closer points brighter/larger)
         const perspective = 1 / (1.4 - z2); // z in [-1,1] => scale ~ [0.7, inf)
-        const screenX = cx + x1 * radius * perspective;
-        const screenY = cy + y2 * radius * perspective;
+        const baseX = cx + x1 * radius * perspective;
+        const baseY = cy + y2 * radius * perspective;
         // Jitter influenced lightly by audio to avoid rigid rotation feel
         const jitter = (energyRef.current ** 2) * 0.6; // non-linear
-        const screenX = cx + (x1 + (Math.sin(i + rotX) * 0.002 * jitter)) * radius * perspective;
-        const screenY = cy + (y2 + (Math.cos(i + rotY) * 0.002 * jitter)) * radius * perspective;
+        const screenX = baseX + Math.sin(i + rotX) * 0.6 * jitter;
+        const screenY = baseY + Math.cos(i + rotY) * 0.6 * jitter;
         const pointSize = Math.max(1, 1.0 * perspective + energyRef.current * 0.3);
         const alpha = Math.min(0.75, 0.30 + 0.55 * perspective + energyRef.current * 0.2);
 
