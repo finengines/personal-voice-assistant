@@ -1887,10 +1887,8 @@ async def entrypoint(ctx: JobContext):
         # We can also add a shutdown hook here if needed
         return
 
-    # Handle tools_disabled case
-    if tools_disabled:
-        mcp_servers = []
-    elif mcp_servers:
+    # Always pass MCP servers. If the model can't use tools, LiveKit will ignore them.
+    if mcp_servers:
         logger.info("✅ Loaded %s MCP server(s) for preset", len(mcp_servers))
     else:
         logger.info("ℹ️ No MCP servers configured – using built-in function tools only")
