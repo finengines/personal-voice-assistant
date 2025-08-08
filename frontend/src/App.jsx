@@ -40,9 +40,25 @@ function MainApp() {
 
   // Visual settings
   const [visualSettings, setVisualSettings] = useState({
-    visualStyle: 'particles', // 'circle' | 'particles'
+    visualStyle: 'particles', // 'circle' | 'particles' | 'flow-field' | 'constellation' | 'radial-spectrum'
+    // particles
     particleDensity: 'medium', // 'low' | 'medium' | 'high'
     particleColor: '#3a3a3a',
+    // flow field
+    flowNumParticles: 1400,
+    flowTrailAlpha: 0.08,
+    flowColor: '#5a5aff',
+    flowSensitivity: 1.0,
+    // constellation
+    constellationDensity: 'medium',
+    constellationColor: '#5fd1ff',
+    constellationLineColor: 'rgba(95, 209, 255, 0.35)',
+    constellationSensitivity: 1.0,
+    // radial spectrum
+    radialBarCount: 96,
+    radialInnerRadiusRatio: 0.45,
+    radialBarColor: '#a6ff7a',
+    radialGlow: true,
   });
 
   // Audio analyser for particle sphere

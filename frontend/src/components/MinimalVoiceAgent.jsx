@@ -4,6 +4,10 @@ import { FiSettings, FiChevronDown, FiVolume2, FiVolumeX } from 'react-icons/fi'
 import MemoryIndicator from './MemoryIndicator';
 import ParticleIndicator from './ParticleIndicator';
 import AudioParticleSphere from './AudioParticleSphere';
+import FlowFieldParticles from './FlowFieldParticles';
+import ConstellationParticles from './ConstellationParticles';
+import RadialSpectrum from './RadialSpectrum';
+import DotFieldCanvas from '../DotFieldCanvas';
 
 const MinimalVoiceAgent = ({
   isConnected,
@@ -91,7 +95,12 @@ const MinimalVoiceAgent = ({
       <div className="main-interaction">
         <div className="voice-visualizer">
           <div className="connection-container">
-            {/* Particle sphere background */}
+            {/* Visual backgrounds */}
+            {visualSettings.visualStyle === 'circle' && (
+              <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 1 }}>
+                <DotFieldCanvas active={isConnected && agentReady} />
+              </div>
+            )}
             {visualSettings.visualStyle === 'particles' && (
               <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 1 }}>
                 <AudioParticleSphere
@@ -104,8 +113,49 @@ const MinimalVoiceAgent = ({
                 />
               </div>
             )}
+            {visualSettings.visualStyle === 'flow-field' && (
+              <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 1, overflow: 'hidden', borderRadius: '50%' }}>
+                <FlowFieldParticles
+                  enabled
+                  analyser={audioAnalyser}
+                  size={340}
+                  numParticles={visualSettings.flowNumParticles ?? 1400}
+                  fieldScale={0.008}
+                  baseSpeed={0.5}
+                  color={visualSettings.flowColor || 'rgba(90, 90, 255, 0.7)'}
+                  trailAlpha={visualSettings.flowTrailAlpha ?? 0.08}
+                  sensitivity={visualSettings.flowSensitivity ?? 1.0}
+                />
+              </div>
+            )}
+            {visualSettings.visualStyle === 'constellation' && (
+              <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 1 }}>
+                <ConstellationParticles
+                  enabled
+                  analyser={audioAnalyser}
+                  size={320}
+                  density={visualSettings.constellationDensity || 'medium'}
+                  color={visualSettings.constellationColor || '#5fd1ff'}
+                  lineColor={visualSettings.constellationLineColor || 'rgba(95, 209, 255, 0.35)'}
+                  sensitivity={visualSettings.constellationSensitivity ?? 1.0}
+                />
+              </div>
+            )}
+            {visualSettings.visualStyle === 'radial-spectrum' && (
+              <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 1 }}>
+                <RadialSpectrum
+                  enabled
+                  analyser={audioAnalyser}
+                  size={320}
+                  barCount={visualSettings.radialBarCount ?? 96}
+                  innerRadiusRatio={visualSettings.radialInnerRadiusRatio ?? 0.45}
+                  barColor={visualSettings.radialBarColor || '#a6ff7a'}
+                  glow={visualSettings.radialGlow ?? true}
+                />
+              </div>
+            )}
             <button
-              className={`primary-btn ${isConnected ? 'connected' : ''} ${isConnecting ? 'connecting' : ''} ${visualSettings.visualStyle === 'particles' ? 'outline' : ''}`}
+              className={`primary-btn ${isConnected ? 'connected' : ''} ${isConnecting ? 'connecting' : ''} ${['particles','flow-field','constellation','radial-spectrum'].includes(visualSettings.visualStyle) ? 'outline' : ''}`}
               onClick={() => isConnected ? onDisconnect() : onConnect(localSelectedPreset?.id)}
               disabled={isConnecting}
               title={getButtonText()}
