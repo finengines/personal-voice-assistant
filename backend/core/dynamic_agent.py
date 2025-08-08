@@ -15,7 +15,6 @@ CONSOLIDATED FUNCTIONALITY:
 import logging
 import asyncio
 import json
-import os
 import re
 import time
 import requests
@@ -23,6 +22,7 @@ import numpy as np
 from collections.abc import AsyncIterable
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import os
 
 from dotenv import load_dotenv
 
@@ -60,16 +60,13 @@ try:
 except ImportError:
     noise_cancellation = None
 
-# Disable multilingual turn detector to avoid model loading issues
-MULTILINGUAL_AVAILABLE = False
-MultilingualModel = None
-# # Conditional import for turn detection
-# try:
-#     from livekit.plugins.turn_detector.multilingual import MultilingualModel
-#     MULTILINGUAL_AVAILABLE = True
-# except ImportError:
-#     MULTILINGUAL_AVAILABLE = False
-#     MultilingualModel = None
+# Conditional import for turn detection
+try:
+    from livekit.plugins.turn_detector.multilingual import MultilingualModel
+    MULTILINGUAL_AVAILABLE = True
+except ImportError:
+    MULTILINGUAL_AVAILABLE = False
+    MultilingualModel = None
 
 from api.preset_manager import preset_manager
 from agent_config import AgentPresetConfig, VoiceConfig, LLMConfig, STTConfig, AgentConfig, SpeedConfig
@@ -78,29 +75,18 @@ from database import init_db
 
 logger = logging.getLogger("dynamic-agent")
 
-# Ensure env vars from .env are available when running locally
 load_dotenv()
 
 # MCP client for Graphiti integration will be available through the session
 GRAPHITI_AVAILABLE = True  # Will be set based on MCP server availability
 
-# Toggle to completely disable internal/REST-based memory system and rely solely on MCP tools
-INTERNAL_MEMORY_ENABLED = False
-
 
 class DynamicAgent(Agent):
     """Agent that configures itself based on a preset and includes built-in tools with enhanced memory capabilities"""
     
-    # Graphiti API configuration from environment variables
+    # Graphiti API configuration (env sanitized)
     GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "").strip()
     GRAPHITI_API_URL = os.getenv("GRAPHITI_API_URL", "").strip()
-
-    @staticmethod
-    def _is_placeholder_graphiti_url(url: Optional[str]) -> bool:
-        try:
-            return (not url) or ("your-graphiti-instance.com" in url)
-        except Exception:
-            return True
     
     def __init__(self, preset: AgentPresetConfig) -> None:
         # Store preset for async initialization
@@ -128,13 +114,13 @@ class DynamicAgent(Agent):
         if self.enable_fast_preresponse:
             self._setup_fast_preresponse()
         
-        # Memory system initialization (disabled in simplified mode; rely on MCP tools)
+        # Memory system initialization
         self.memory_threshold = 3
         self.conversation_turns = 0
         self.conversation_start_time = None
         self.conversation_history = []
         self.memory_context = ""
-        self.memory_api_available = False if not INTERNAL_MEMORY_ENABLED else not self._is_placeholder_graphiti_url(self.GRAPHITI_API_URL)
+        self.memory_api_available = True
         self.local_memory = []
         
         # Memory performance tracking
@@ -283,12 +269,36 @@ Memory System Guidelines:
             return []
 
     async def _search_memory_facts(self, query: str, max_facts: int = 5) -> List[str]:
-        """Simplified: disable REST memory search; rely on MCP tools or conversation context only."""
-        return []
-
-    def _search_local_memory(self, query: str, max_facts: int = 5) -> List[str]:
-        """Simplified: no local memory search results."""
-        return []
+        """Search memory facts using REST API"""
+        try:
+            payload = {
+                "query": query,
+                "max_facts": max_facts
+            }
+            
+            resp = requests.post(
+                f"{self.GRAPHITI_API_URL}/search_memory_facts", 
+                json=payload, 
+                timeout=self.memory_search_timeout
+            )
+            
+            if resp.ok:
+                data = resp.json()
+                if 'facts' in data:
+                    return [fact.get('fact', '') for fact in data['facts'] if fact.get('fact')]
+                elif 'results' in data:
+                    return data['results']
+                else:
+                    # Handle different response formats
+                    return []
+            else:
+                logger.debug(f"Memory search failed with status {resp.status_code}: {resp.text}")
+            
+            return []
+            
+        except Exception as e:
+            logger.debug(f"Memory search error for '{query}': {e}")
+            return []
 
 
 
@@ -320,16 +330,15 @@ Memory System Guidelines:
             self._enhanced_instructions = enhanced_prompt
             await self.update_instructions(enhanced_prompt)
         
-        # Check MCP server availability (simplified: rely solely on MCP; internal memory disabled)
+        # Check MCP server availability
         try:
             if hasattr(self, 'session') and hasattr(self.session, 'mcp_servers') and self.session.mcp_servers:
-                logger.info(f"✅ MCP connected: {len(self.session.mcp_servers)} server(s)")
-                for i, server in enumerate(self.session.mcp_servers):
-                    logger.info(f"  - MCP Server {i+1}: {type(server).__name__} ({getattr(server, 'url', 'N/A')})")
+                self.memory_api_available = True
+                logger.info("✅ Memory system initialized with MCP servers")
             else:
-                logger.warning("❗ No MCP servers found in session; tools will be unavailable")
-        except RuntimeError as e:
-            logger.debug(f"Session not available yet: {e}")
+                logger.info("ℹ️ Using REST API for memory operations")
+        except RuntimeError:
+            logger.debug("Session not available yet, will use REST API for memory operations")
 
     @function_tool
     async def get_current_time(self, location: str = "local", timezone_name: str = "") -> str:
@@ -592,70 +601,6 @@ Just ask me naturally and I'll use the right tool to help you! For example:
         """Get information about the current agent preset and capabilities"""
         return f"I am currently configured as '{self.preset_name}': {self.preset.description}. I have access to {len(self.preset.mcp_server_ids)} specialized tools and services."
 
-    @function_tool
-    async def check_memory_status(self) -> str:
-        """Check the status of memory systems and tools available to the agent"""
-        logger.info("🔍 Checking memory system status")
-        
-        status_parts = []
-        
-        # Check Graphiti REST API connectivity
-        try:
-            resp = requests.get(f"{self.GRAPHITI_API_URL}/healthcheck", timeout=3)
-            if resp.ok:
-                status_parts.append("✅ Graphiti REST API: Connected")
-                self.memory_api_available = True
-            else:
-                status_parts.append(f"❌ Graphiti REST API: Error {resp.status_code}")
-                self.memory_api_available = False
-        except Exception as e:
-            status_parts.append(f"❌ Graphiti REST API: Connection failed - {e}")
-            self.memory_api_available = False
-        
-        # Check MCP tools available through session
-        mcp_tools_count = 0
-        if hasattr(self, 'session') and self.session and hasattr(self.session, 'mcp_servers'):
-            mcp_servers = getattr(self.session, 'mcp_servers', [])
-            if mcp_servers:
-                status_parts.append(f"✅ MCP Servers: {len(mcp_servers)} connected")
-                for i, server in enumerate(mcp_servers):
-                    server_info = f"  - Server {i+1}: {type(server).__name__}"
-                    if hasattr(server, 'url'):
-                        server_info += f" ({server.url})"
-                    status_parts.append(server_info)
-                    
-                    # Try to count tools
-                    try:
-                        if hasattr(server, 'list_tools'):
-                            tools = await server.list_tools()
-                            mcp_tools_count += len(tools) if tools else 0
-                            status_parts.append(f"    Tools: {len(tools) if tools else 0}")
-                    except Exception as e:
-                        status_parts.append(f"    Tools: Error listing - {e}")
-            else:
-                status_parts.append("❌ MCP Servers: None connected")
-        else:
-            status_parts.append("❌ MCP Servers: Session not available")
-        
-        # Check memory statistics
-        stats = self.get_memory_stats()
-        status_parts.append(f"\n📊 Memory Statistics:")
-        status_parts.append(f"  - Memories retrieved: {stats['memories_retrieved']}")
-        status_parts.append(f"  - Memories stored: {stats['memories_stored']}")
-        status_parts.append(f"  - Local session memories: {len(self.local_memory)}")
-        status_parts.append(f"  - Conversation turns: {self.conversation_turns}")
-        
-        # Configuration info
-        status_parts.append(f"\n🔧 Configuration:")
-        status_parts.append(f"  - Graphiti MCP URL: {self.GRAPHITI_MCP_URL}")
-        status_parts.append(f"  - Graphiti API URL: {self.GRAPHITI_API_URL}")
-        status_parts.append(f"  - Preset MCP servers: {self.preset.mcp_server_ids}")
-        status_parts.append(f"  - Total MCP tools detected: {mcp_tools_count}")
-        
-        result = "\n".join(status_parts)
-        logger.info(f"Memory status check result:\n{result}")
-        return result
-
     # =============================================================================
     # MEMORY SYSTEM METHODS (Enhanced from GraphitiAgent)
     # =============================================================================
@@ -783,45 +728,18 @@ Just ask me naturally and I'll use the right tool to help you! For example:
         return unique_facts
 
     async def store_memory(self, episode_body: str, name: str = None):
-        """Store information to memory using Graphiti REST API (/messages) with local fallback"""
+        """Store information to memory using REST API"""
         try:
             episode_name = name or f"Voice Memory {datetime.utcnow().isoformat()}"
             
             payload = {
-                "group_id": "global",
-                "messages": [
-                    {
-                        "content": episode_body,
-                        "role_type": "assistant",
-                        "role": "assistant",
-                        "name": episode_name,
-                        "timestamp": datetime.utcnow().isoformat()
-                    }
-                ]
+                "name": episode_name,
+                "episode_body": episode_body,
+                "source": "message",
+                "source_description": "Voice agent conversation"
             }
-            if not self.memory_api_available or self._is_placeholder_graphiti_url(self.GRAPHITI_API_URL):
-                # Local-only mode
-                self.local_memory.append(payload)
-                self.memory_stats['memories_stored'] += 1
-                self._emit_memory_event('memory-fallback', "Saved to local session memory (offline)")
-                return
-
-            base = self.GRAPHITI_API_URL.rstrip('/')
-            # Graphiti messages ingestion endpoint
-            endpoints = [f"{base}/messages", f"{base}/api/messages"]
-            resp = None
-            for url in endpoints:
-                try:
-                    r = requests.post(url, json=payload, timeout=5)
-                except Exception:
-                    continue
-                # Accept 200/201/202 as success
-                if r.status_code in (200, 201, 202):
-                    resp = r
-                    break
-            if resp is None:
-                raise RuntimeError("All message ingestion endpoints failed")
-            if resp.status_code in (200, 201, 202):
+            resp = requests.post(f"{self.GRAPHITI_API_URL}/add_memory", json=payload, timeout=3)
+            if resp.ok:
                 logger.info(f"[Graphiti] Stored memory via REST: {episode_name}")
                 self.memory_stats['memories_stored'] += 1
                 self._emit_memory_event('memory-created', "New memory saved")
@@ -1159,9 +1077,7 @@ Just ask me naturally and I'll use the right tool to help you! For example:
                 logger.error(f"Error processing fast response: {e}")
 
         # Always attempt to retrieve relevant memories for context
-        logger.info(f"🧠 About to retrieve memories for: '{user_input[:50]}...'")
         relevant_memories = await self.retrieve_contextual_memory(user_input)
-        logger.info(f"🧠 Retrieved {len(relevant_memories)} memories: {relevant_memories[:2] if relevant_memories else 'None'}")
         
         # Build enhanced system prompt with memory context
         # Use enhanced instructions if available, otherwise fall back to original
@@ -1570,60 +1486,71 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
     mcp_servers = []
     
     # Always add Graphiti MCP server for memory functionality
-    graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "").strip()
-    if not graphiti_mcp_url:
-        # Derive from API URL if MCP URL not set
-        graphiti_api_url = os.getenv("GRAPHITI_API_URL", "").strip()
-        if graphiti_api_url:
-            graphiti_mcp_url = graphiti_api_url.rstrip("/") + "/sse"
+    GRAPHITI_MCP_URL = "https://graphiti.mcp.finproductions.uk/sse"
+    try:
+        logger.info(f"🔌 Adding default Graphiti MCP server: {GRAPHITI_MCP_URL}")
+        graphiti_server = mcp.MCPServerHTTP(
+            url=GRAPHITI_MCP_URL, 
+            timeout=10.0,  # Reduced timeout
+            sse_read_timeout=60.0,  # Reduced from 120
+        )
+        mcp_servers.append(graphiti_server)
+        logger.info(f"✅ Added default Graphiti MCP server: {GRAPHITI_MCP_URL}")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to add default Graphiti MCP server: {e}")
     
-    if graphiti_mcp_url:
-        try:
-            logger.info(f"🔌 Adding default Graphiti MCP server: {graphiti_mcp_url}")
-            graphiti_server = mcp.MCPServerHTTP(
-                url=graphiti_mcp_url, 
-                timeout=10.0,  # Reduced timeout
-                sse_read_timeout=60.0,  # Reduced from 120
-            )
-            mcp_servers.append(graphiti_server)
-            logger.info(f"✅ Added default Graphiti MCP server: {graphiti_mcp_url}")
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to add default Graphiti MCP server: {e}")
-    else:
-        logger.warning("⚠️ No GRAPHITI_MCP_URL or GRAPHITI_API_URL configured, skipping Graphiti MCP server")
+    if not mcp_server_ids:
+        logger.info("ℹ️ No additional MCP servers specified in preset")
+        return mcp_servers
     
     try:
-        # Load MCP servers from the database manager directly to include auth config
-        logger.info("🔄 Loading MCP servers from database manager...")
-        try:
-            from config.mcp_config_db import mcp_manager as db_mcp_manager
-            await db_mcp_manager.initialize()
-            db_servers = db_mcp_manager.list_servers()
-            available_servers = {sid: cfg.to_dict() for sid, cfg in db_servers.items()}
-            logger.info(f"✅ Loaded {len(available_servers)} servers from database")
-        except Exception as db_error:
-            logger.warning(f"⚠️ Database load failed ({db_error}), falling back to JSON config file")
-            # Fallback to local config file  
-            config_path = '/app/config/mcp_servers.json'
-            try:
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                available_servers = config.get('servers', {})
-                logger.info(f"✅ Loaded {len(available_servers)} servers from JSON config")
-            except FileNotFoundError:
-                logger.warning("⚠️ mcp_servers.json not found, no servers loaded from config")
-                available_servers = {}
+        # Load MCP servers from the local API instead of hardcoded JSON
+        logger.info("🔄 Loading MCP servers from local API...")
         
-        # If no specific servers requested by preset, load all enabled servers from DB/config
-        if not mcp_server_ids:
+        # Try to get servers from local MCP API
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get('http://localhost:8082/servers') as response:
+                    if response.status == 200:
+                        api_result = await response.json()
+                        if api_result.get('success'):
+                            available_servers = {server['server_id']: {
+                                'name': server['name'],
+                                'server_type': server['server_type'],
+                                'url': server.get('url'),
+                                'enabled': server['enabled'],
+                                'auth': {'type': 'bearer', 'token': 'key'} if server['server_type'] == 'sse' else None
+                            } for server in api_result['data']}
+                            logger.info(f"✅ Loaded {len(available_servers)} servers from API")
+                        else:
+                            raise Exception(f"API returned error: {api_result.get('message')}")
+                    else:
+                        raise Exception(f"API returned status {response.status}")
+        except Exception as api_error:
+            logger.warning(f"⚠️ Failed to load from API ({api_error}), trying database fallback")
             try:
-                enabled_ids = [sid for sid, cfg in available_servers.items() if cfg.get('enabled', False)]
-                mcp_server_ids = enabled_ids
-                logger.info(f"ℹ️ No preset-specific MCP servers provided; loading all enabled servers: {mcp_server_ids}")
-            except Exception:
-                logger.info("ℹ️ No preset-specific MCP servers and no enabled servers found; skipping")
-                mcp_server_ids = []
-
+                from config.mcp_config_db import mcp_manager as db_mcp_manager
+                # Ensure DB manager is initialized
+                await db_mcp_manager.initialize()
+                db_servers = db_mcp_manager.list_servers()
+                available_servers = {
+                    sid: cfg.to_dict() for sid, cfg in db_servers.items()
+                }
+                logger.info(f"✅ Loaded {len(available_servers)} servers from database fallback")
+            except Exception as db_error:
+                logger.warning(f"⚠️ Database fallback failed ({db_error}), falling back to config file")
+                # Fallback to local config file  
+                config_path = '/app/config/mcp_servers.json'
+                try:
+                    with open(config_path, 'r') as f:
+                        config = json.load(f)
+                    available_servers = config.get('servers', {})
+                    logger.info(f"✅ Loaded {len(available_servers)} servers from JSON config")
+                except FileNotFoundError:
+                    logger.warning("⚠️ mcp_servers.json not found, no servers loaded from config")
+                    available_servers = {}
+        
         logger.info(f"🔍 Looking for MCP servers: {mcp_server_ids}")
         server_names = list(available_servers.keys())
         logger.info(f"🔍 Available MCP servers: {server_names}")
@@ -1645,24 +1572,27 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                     logger.warning(f"⚠️ No URL for server '{server_id}', skipping")
                     continue
                 
-                # Build headers for authentication (bearer only, as in private repo)
-                headers = {}
-                auth = server_config.get('auth', {})
-                if auth and auth.get('type') == 'bearer' and auth.get('token'):
-                    headers['Authorization'] = f"Bearer {auth['token']}"
-
-                logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
-                
-                # Create LiveKit MCP server with reasonable timeouts
-                server = mcp.MCPServerHTTP(
-                    url=url,
-                    headers=headers if headers else None,
-                    timeout=15.0,
-                    sse_read_timeout=90.0,
-                    client_session_timeout_seconds=30.0,
-                )
-                mcp_servers.append(server)
-                logger.info(f"✅ Added MCP server: {server_config.get('name', server_id)} ({url})")
+                try:
+                    # Build headers for authentication
+                    headers = {}
+                    auth = server_config.get('auth', {})
+                    if auth and auth.get('type') == 'bearer' and auth.get('token'):
+                        headers['Authorization'] = f"Bearer {auth['token']}"
+                    
+                    logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
+                    
+                    # Create LiveKit MCP server with reasonable timeouts
+                    server = mcp.MCPServerHTTP(
+                        url=url,
+                        headers=headers if headers else None,
+                        timeout=15.0,  # Reasonable connection timeout
+                        sse_read_timeout=90.0,  # Reasonable read timeout
+                        client_session_timeout_seconds=30.0,  # Reasonable session timeout
+                    )
+                    mcp_servers.append(server)
+                    logger.info(f"✅ Added MCP server: {server_config.get('name', server_id)} ({url})")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to create MCP server '{server_id}': {e}")
             else:
                 logger.warning(f"⚠️ Server type '{server_type}' not supported for '{server_id}'")
                 
@@ -1759,15 +1689,13 @@ async def get_preset_for_room(ctx: JobContext) -> AgentPresetConfig:
 
 
 async def entrypoint(ctx: JobContext):
-    """MINIMAL TEST ENTRYPOINT"""
-    logging.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    logging.critical("!!!!!!!!!! MINIMAL ENTRYPOINT CALLED !!!!!!!!!!")
-    logging.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    """Worker entrypoint that dynamically builds the agent session from the active preset."""
+
     # Attach room info to all structured logs
     ctx.log_context_fields = {"room": ctx.room.name}
 
     # ---------------------------------------------------------------------
-    # 1. Load preset configuration (required for the rest of the flow)
+    # 1. Load preset configuration (fast operation)
     # ---------------------------------------------------------------------
     logger.info("🔄 Loading preset configuration for room '%s'…", ctx.room.name)
     preset = await get_preset_for_room(ctx)
@@ -1824,36 +1752,27 @@ async def entrypoint(ctx: JobContext):
         # We can also add a shutdown hook here if needed
         return
 
-    # Handle tools_disabled case conservatively: if we have MCP servers configured
-    # (e.g., Graphiti Memory), keep them so the agent can still use tools via MCP.
-    if tools_disabled and not mcp_servers:
-        logger.warning("🔧 Tools disabled for this model and no MCP servers configured")
+    # Handle tools_disabled case
+    if tools_disabled:
+        mcp_servers = []
     elif mcp_servers:
         logger.info("✅ Loaded %s MCP server(s) for preset", len(mcp_servers))
-        for i, server in enumerate(mcp_servers):
-            server_info = f"  - MCP Server {i+1}: {type(server).__name__}"
-            if hasattr(server, 'url'):
-                server_info += f" ({server.url})"
-            logger.info(server_info)
     else:
-        logger.warning("⚠️ No MCP servers configured – agent will only have built-in function tools")
+        logger.info("ℹ️ No MCP servers configured – using built-in function tools only")
 
     # ---------------------------------------------------------------------
     # 4. Configure session options efficiently
     # ---------------------------------------------------------------------
     speed = preset.agent_config.speed_config or SpeedConfig()
 
-    # Choose turn-detection implementation with proper fallbacks  
-    # Temporarily force VAD to avoid turn detector model issues
-    turn_detection_impl = "vad"
-    logger.info("🔧 Using VAD turn detection (multilingual model temporarily disabled)")
-    # try:
-    #     turn_detection_impl = (
-    #         MultilingualModel() if (speed.advanced_turn_detection and MULTILINGUAL_AVAILABLE and MultilingualModel) else "vad"
-    #     )
-    # except Exception as e:
-    #     logger.warning(f"Turn detection model failed to load: {e}, falling back to VAD")
-    #     turn_detection_impl = "vad"
+    # Choose turn-detection implementation with proper fallbacks
+    try:
+        turn_detection_impl = (
+            MultilingualModel() if (speed.advanced_turn_detection and MULTILINGUAL_AVAILABLE and MultilingualModel) else "vad"
+        )
+    except Exception as e:
+        logger.warning(f"Turn detection model failed to load: {e}, falling back to VAD")
+        turn_detection_impl = "vad"
 
     # ---------------------------------------------------------------------
     # 5. Create the LiveKit AgentSession with optimized settings
@@ -2029,13 +1948,13 @@ if __name__ == "__main__":
             silero.VAD.load()
             logger.info("✅ VAD model downloaded")
             
-            # Download turn detection models if available (disabled for now)
-            # if MULTILINGUAL_AVAILABLE:
-            #     try:
-            #         MultilingualModel()._download()
-            #         logger.info("✅ Turn detection models downloaded")
-            #     except Exception as e:
-            #         logger.warning(f"Turn detection model download failed: {e}")
+            # Download turn detection models if available
+            if MULTILINGUAL_AVAILABLE:
+                try:
+                    MultilingualModel()._download()
+                    logger.info("✅ Turn detection models downloaded")
+                except Exception as e:
+                    logger.warning(f"Turn detection model download failed: {e}")
             
             logger.info("✅ Model download complete")
         except Exception as e:

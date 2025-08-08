@@ -82,11 +82,9 @@ async def entrypoint(ctx: JobContext):
     else:
         logger.info("ℹ️  No external MCP servers configured")
 
-    # Temporarily force VAD to avoid turn detector model issues
-    turn_detection_impl = "vad"
-    # turn_detection_impl = (
-    #     MultilingualModel() if (speed.advanced_turn_detection and MULTILINGUAL_AVAILABLE and MultilingualModel) else "vad"
-    # )
+    turn_detection_impl = (
+        MultilingualModel() if (speed.advanced_turn_detection and MULTILINGUAL_AVAILABLE and MultilingualModel) else "vad"
+    )
 
     # ------------------------------------------------------------------
     # 4. Create AgentSession
