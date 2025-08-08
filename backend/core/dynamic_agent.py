@@ -330,7 +330,7 @@ Memory System Guidelines:
             self._enhanced_instructions = enhanced_prompt
             await self.update_instructions(enhanced_prompt)
         
-        # Check MCP server availability (LiveKit auto-loads MCP tools)
+        # Check MCP server availability
         try:
             if hasattr(self, 'session') and hasattr(self.session, 'mcp_servers') and self.session.mcp_servers:
                 self.memory_api_available = True
@@ -339,7 +339,6 @@ Memory System Guidelines:
                 logger.info("ℹ️ Using REST API for memory operations")
         except RuntimeError:
             logger.debug("Session not available yet, will use REST API for memory operations")
-
 
     @function_tool
     async def get_current_time(self, location: str = "local", timezone_name: str = "") -> str:
@@ -1483,7 +1482,7 @@ async def load_vad_model(ctx: JobContext):
         return None
 
 async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServer]:
-    """Load MCP servers with robust SSE timeouts, aligned with LiveKit examples"""
+    """Load MCP servers exactly like working private repo with auth support"""
     mcp_servers = []
     
     # Always add Graphiti MCP server for memory functionality (using environment variable)
@@ -1491,8 +1490,11 @@ async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServ
     if GRAPHITI_MCP_URL:
         try:
             logger.info(f"🔌 Adding Graphiti MCP server: {GRAPHITI_MCP_URL}")
-            # Keep it simple; avoid aggressive read timeouts for SSE (server may idle between events)
-            graphiti_server = mcp.MCPServerHTTP(url=GRAPHITI_MCP_URL)
+            graphiti_server = mcp.MCPServerHTTP(
+                url=GRAPHITI_MCP_URL, 
+                timeout=10.0,  # Match private repo settings
+                sse_read_timeout=60.0,  # Match private repo settings
+            )
             mcp_servers.append(graphiti_server)
             logger.info(f"✅ Added Graphiti MCP server: {GRAPHITI_MCP_URL}")
         except Exception as e:
@@ -1524,15 +1526,9 @@ async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServ
                         logger.info(f"✅ Loaded {len(available_servers)} servers from API")
                         
                         # Load only the servers specified in the preset
-                        logger.info(f"🔍 Preset requested MCP servers: {mcp_server_ids}")
-                        logger.info(f"🔍 Available MCP servers: {list(available_servers.keys())}")
-
-                        added = 0
-                        invalid_ids: list[str] = []
-                        for server_id in mcp_server_ids or []:
+                        for server_id in mcp_server_ids:
                             if server_id not in available_servers:
                                 logger.warning(f"⚠️ MCP server '{server_id}' not found in available servers")
-                                invalid_ids.append(server_id)
                                 continue
                                 
                             server_config = available_servers[server_id]
@@ -1557,44 +1553,20 @@ async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServ
                                     
                                     logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
                                     
-                                    # Create LiveKit MCP server (example-aligned)
+                                    # Create LiveKit MCP server (exactly like private repo)
                                     server = mcp.MCPServerHTTP(
                                         url=url,
                                         headers=headers if headers else None,
+                                        timeout=15.0,  # Reasonable connection timeout
+                                        sse_read_timeout=90.0,  # Reasonable read timeout
+                                        client_session_timeout_seconds=30.0,  # Reasonable session timeout
                                     )
                                     mcp_servers.append(server)
-                                    added += 1
                                     logger.info(f"✅ Added MCP server: {server_config.get('name', server_id)} ({url})")
                                 except Exception as e:
                                     logger.warning(f"⚠️ Failed to create MCP server '{server_id}': {e}")
                             else:
                                 logger.warning(f"⚠️ Server type '{server_type}' not supported for '{server_id}'")
-
-                        # Fallback: if preset had invalid IDs and nothing was added, load all enabled SSE servers
-                        if (mcp_server_ids and invalid_ids and added == 0):
-                            logger.warning(f"⚠️ Preset contained invalid MCP IDs {invalid_ids}. Falling back to load all enabled SSE servers.")
-                            for sid, scfg in available_servers.items():
-                                try:
-                                    if not scfg.get('enabled', True):
-                                        continue
-                                    if scfg.get('server_type') != 'sse':
-                                        continue
-                                    url = scfg.get('url')
-                                    if not url:
-                                        continue
-                                    headers = {}
-                                    auth = scfg.get('auth', {})
-                                    if auth and auth.get('type') == 'bearer' and auth.get('token'):
-                                        headers['Authorization'] = f"Bearer {auth['token']}"
-                                    server = mcp.MCPServerHTTP(
-                                        url=url,
-                                        headers=headers if headers else None,
-                                    )
-                                    mcp_servers.append(server)
-                                    added += 1
-                                    logger.info(f"✅ Added MCP server by fallback: {scfg.get('name', sid)} ({url})")
-                                except Exception as e:
-                                    logger.warning(f"⚠️ Fallback add failed for '{sid}': {e}")
                     else:
                         raise Exception(f"API returned error: {api_result.get('message')}")
                 else:
@@ -1758,12 +1730,6 @@ async def get_preset_for_room(ctx: JobContext) -> AgentPresetConfig:
     try:
         # Initialize database and preset manager
         await init_db()
-        # Force-refresh presets to avoid stale cached IDs in worker
-        try:
-            await preset_manager.load_all_presets_fresh()
-            logger.info("🔄 Preset cache refreshed for worker")
-        except Exception as e:
-            logger.warning(f"⚠️ Could not refresh preset cache: {e}")
         
         # If we have a preset_id from the room name, try to load that specific preset
         if preset_id:
@@ -1887,8 +1853,10 @@ async def entrypoint(ctx: JobContext):
         # We can also add a shutdown hook here if needed
         return
 
-    # Always pass MCP servers. If the model can't use tools, LiveKit will ignore them.
-    if mcp_servers:
+    # Handle tools_disabled case
+    if tools_disabled:
+        mcp_servers = []
+    elif mcp_servers:
         logger.info("✅ Loaded %s MCP server(s) for preset", len(mcp_servers))
     else:
         logger.info("ℹ️ No MCP servers configured – using built-in function tools only")

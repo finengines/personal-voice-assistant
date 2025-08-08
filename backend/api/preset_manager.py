@@ -41,12 +41,6 @@ class PresetManager:
             self._cache = presets
             self._cache_dirty = False
             return presets
-
-    async def load_all_presets_fresh(self) -> Dict[str, AgentPresetConfig]:
-        """Force refresh the preset cache and return latest presets.
-        Used by the agent worker at session start to avoid stale IDs."""
-        self._cache_dirty = True
-        return await self.load_all_presets()
     
     async def get_preset(self, preset_id: str) -> Optional[AgentPresetConfig]:
         """Get a specific preset by ID"""
