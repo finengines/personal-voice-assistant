@@ -282,25 +282,23 @@ Memory System Guidelines:
             return []
 
     async def _search_memory_facts(self, query: str, max_facts: int = 5) -> List[str]:
-        """Search memory facts using REST API (/retrieve), with local fallback when remote is unavailable"""
+        """Search memory facts using Graphiti REST API (/search), with local fallback when remote is unavailable"""
         # If Graphiti isn't configured, use local session memory
         if not self.memory_api_available or self._is_placeholder_graphiti_url(self.GRAPHITI_API_URL):
             return self._search_local_memory(query=query, max_facts=max_facts)
 
         try:
-            payload = {"query": query, "max_results": max_facts, "group_ids": ["global"]}
+            # Graphiti REST API accepts POST /search with payload { query, max_facts, group_ids }
+            payload = {"query": query, "max_facts": max_facts, "group_ids": ["global"]}
             base = self.GRAPHITI_API_URL.rstrip('/')
-            # Try multiple endpoint shapes to accommodate deployments
             candidates = [
-                ("POST", f"{base}/retrieve", payload),
-                ("POST", f"{base}/api/retrieve", payload),
-                ("GET",  f"{base}/retrieve?query={requests.utils.quote(query)}&max_results={max_facts}", None),
-                ("GET",  f"{base}/api/retrieve?query={requests.utils.quote(query)}&max_results={max_facts}", None),
+                ("POST", f"{base}/search", payload),
+                ("POST", f"{base}/api/search", payload),  # fallback shape if proxied
             ]
             for method, url, body in candidates:
                 try:
                     resp = requests.request(method, url, json=body, timeout=self.memory_search_timeout)
-                except Exception as e:
+                except Exception:
                     continue
                 if not resp.ok:
                     continue
@@ -308,6 +306,7 @@ Memory System Guidelines:
                     data = resp.json()
                 except Exception:
                     continue
+                # Accept several shapes defensively
                 if isinstance(data, dict):
                     if 'facts' in data:
                         return [fact.get('fact', '') for fact in data['facts'] if fact.get('fact')]
@@ -875,7 +874,7 @@ Just ask me naturally and I'll use the right tool to help you! For example:
         return unique_facts
 
     async def store_memory(self, episode_body: str, name: str = None):
-        """Store information to memory using REST API (/ingest) with local fallback"""
+        """Store information to memory using Graphiti REST API (/messages) with local fallback"""
         try:
             episode_name = name or f"Voice Memory {datetime.utcnow().isoformat()}"
             
@@ -899,20 +898,21 @@ Just ask me naturally and I'll use the right tool to help you! For example:
                 return
 
             base = self.GRAPHITI_API_URL.rstrip('/')
-            # Try multiple endpoint shapes
-            endpoints = [f"{base}/ingest", f"{base}/api/ingest"]
+            # Graphiti messages ingestion endpoint
+            endpoints = [f"{base}/messages", f"{base}/api/messages"]
             resp = None
             for url in endpoints:
                 try:
-                    r = requests.post(url, json=payload, timeout=3)
+                    r = requests.post(url, json=payload, timeout=5)
                 except Exception:
                     continue
-                if r.ok:
+                # Accept 200/201/202 as success
+                if r.status_code in (200, 201, 202):
                     resp = r
                     break
             if resp is None:
-                raise RuntimeError("All ingest endpoints failed")
-            if resp.ok:
+                raise RuntimeError("All message ingestion endpoints failed")
+            if resp.status_code in (200, 201, 202):
                 logger.info(f"[Graphiti] Stored memory via REST: {episode_name}")
                 self.memory_stats['memories_stored'] += 1
                 self._emit_memory_event('memory-created', "New memory saved")

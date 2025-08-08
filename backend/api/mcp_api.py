@@ -86,6 +86,38 @@ async def lifespan(app: FastAPI):
     try:
         # Initialize and load configuration
         await mcp_manager.initialize()
+
+        # Auto-register Graphiti MCP server from environment if present and not already configured
+        try:
+            graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "").strip()
+            if graphiti_mcp_url and "your-graphiti-instance.com" not in graphiti_mcp_url:
+                # Avoid duplicates
+                existing = mcp_manager.get_server("graphiti-memory")
+                if not existing:
+                    cfg = MCPServerConfig(
+                        id="graphiti-memory",
+                        name="Graphiti Memory",
+                        description="Graphiti knowledge base and memory system",
+                        server_type=MCPServerType.SSE,
+                        url=graphiti_mcp_url,
+                        auth=None,
+                        enabled=True,
+                        timeout=10.0,
+                        sse_read_timeout=60.0,
+                    )
+                    try:
+                        await mcp_manager.add_server(cfg)
+                        print(f"✅ Auto-registered Graphiti MCP server from env: {graphiti_mcp_url}")
+                    except Exception as e:
+                        print(f"⚠️  Failed to auto-register Graphiti MCP server: {e}")
+            else:
+                if not graphiti_mcp_url:
+                    print("ℹ️  GRAPHITI_MCP_URL not set; skipping auto-registration")
+                else:
+                    print("ℹ️  GRAPHITI_MCP_URL uses placeholder; skipping auto-registration")
+        except Exception as e:
+            print(f"⚠️  Error in Graphiti auto-registration: {e}")
+
         # Start all enabled servers
         await mcp_manager.start_all_enabled_servers()
         print("✅ MCP API server started successfully")
@@ -666,12 +698,14 @@ async def memory_status():
         graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
         status_data["graphiti_mcp"]["url"] = graphiti_mcp_url
         try:
-            # Graphiti MCP server commonly exposes /healthcheck adjacent to /sse
-            resp = requests.get(graphiti_mcp_url.rstrip('/sse') + '/healthcheck', timeout=3)
+            # Prefer probing the SSE endpoint directly (should return 200 OK on GET)
+            resp = requests.get(graphiti_mcp_url, timeout=3)
             if resp.ok:
                 status_data["graphiti_mcp"]["status"] = "connected"
             else:
-                status_data["graphiti_mcp"]["status"] = f"error_{resp.status_code}"
+                # Fallback: try a conventional healthcheck adjacent to /sse
+                resp2 = requests.get(graphiti_mcp_url.rstrip('/sse') + '/healthcheck', timeout=3)
+                status_data["graphiti_mcp"]["status"] = "connected" if resp2.ok else f"error_{resp2.status_code}"
         except Exception as e:
             status_data["graphiti_mcp"]["status"] = f"failed_{str(e)[:50]}"
         
