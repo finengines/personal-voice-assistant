@@ -15,26 +15,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 
+USE_DATABASE = True
 try:
+    # Prefer the DB-backed configuration manager
     from config.mcp_config_db import (
         mcp_manager,
         MCPServerConfig,
         MCPServerType,
         AuthType,
-        AuthConfig
+        AuthConfig,
     )
-    USE_DATABASE = True
-except ImportError as e:
-    print(f"Warning: Database MCP config not available: {e}")
-    print("Falling back to JSON file configuration")
-    USE_DATABASE = False
-    from config.mcp_config import (
-        mcp_manager,
-        MCPServerConfig,
-        MCPServerType,
-        AuthType,
-        AuthConfig
-    )
+except Exception as e:
+    # Hard fail here to avoid silent fallback. The system should use DB mode.
+    # Log a clear message and re-raise so deployment surfaces the issue.
+    print("Fatal: Failed to import config.mcp_config_db (DB mode)")
+    print(e)
+    raise
 
 # Pydantic models for API
 class AuthConfigAPI(BaseModel):
@@ -144,8 +140,29 @@ except ImportError as e:
 
 # Dependency to ensure MCP manager is loaded
 async def get_mcp_manager():
-    if not mcp_manager._initialized:
-        await mcp_manager.initialize()
+    """Return a ready MCP manager for both DB-backed and file-backed modes.
+
+    - DB mode (config.mcp_config_db): has `_initialized` and async `initialize()`
+    - File mode (config.mcp_config): no `_initialized`; exposes `load_config()`
+    """
+    # Try DB-backed initialize if available, otherwise fall back to JSON loader
+    import asyncio
+    if hasattr(mcp_manager, "initialize"):
+        try:
+            if asyncio.iscoroutinefunction(mcp_manager.initialize):
+                await mcp_manager.initialize()
+            else:
+                mcp_manager.initialize()  # type: ignore[attr-defined]
+            return mcp_manager
+        except Exception:
+            # fall through to JSON config
+            pass
+    # File-backed manager – ensure config is loaded
+    if hasattr(mcp_manager, "load_config"):
+        try:
+            mcp_manager.load_config()  # type: ignore[attr-defined]
+        except Exception:
+            pass
     return mcp_manager
 
 # API Endpoints
