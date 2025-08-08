@@ -1483,7 +1483,7 @@ async def load_vad_model(ctx: JobContext):
         return None
 
 async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServer]:
-    """Load MCP servers exactly like working private repo with auth support"""
+    """Load MCP servers with robust SSE timeouts, aligned with LiveKit examples"""
     mcp_servers = []
     
     # Always add Graphiti MCP server for memory functionality (using environment variable)
@@ -1491,10 +1491,12 @@ async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServ
     if GRAPHITI_MCP_URL:
         try:
             logger.info(f"🔌 Adding Graphiti MCP server: {GRAPHITI_MCP_URL}")
+            # Keep it simple; avoid aggressive read timeouts for SSE (server may idle between events)
             graphiti_server = mcp.MCPServerHTTP(
-                url=GRAPHITI_MCP_URL, 
-                timeout=10.0,  # Match private repo settings
-                sse_read_timeout=60.0,  # Match private repo settings
+                url=GRAPHITI_MCP_URL,
+                timeout=20.0,
+                sse_read_timeout=300.0,
+                client_session_timeout_seconds=90.0,
             )
             mcp_servers.append(graphiti_server)
             logger.info(f"✅ Added Graphiti MCP server: {GRAPHITI_MCP_URL}")
@@ -1527,7 +1529,10 @@ async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServ
                         logger.info(f"✅ Loaded {len(available_servers)} servers from API")
                         
                         # Load only the servers specified in the preset
-                        for server_id in mcp_server_ids:
+                        logger.info(f"🔍 Preset requested MCP servers: {mcp_server_ids}")
+                        logger.info(f"🔍 Available MCP servers: {list(available_servers.keys())}")
+
+                        for server_id in mcp_server_ids or []:
                             if server_id not in available_servers:
                                 logger.warning(f"⚠️ MCP server '{server_id}' not found in available servers")
                                 continue
@@ -1555,12 +1560,13 @@ async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServ
                                     logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
                                     
                                     # Create LiveKit MCP server (exactly like private repo)
+                                    # Favor generous SSE read timeouts; many servers send heartbeats sparsely
                                     server = mcp.MCPServerHTTP(
                                         url=url,
                                         headers=headers if headers else None,
-                                        timeout=15.0,  # Reasonable connection timeout
-                                        sse_read_timeout=90.0,  # Reasonable read timeout
-                                        client_session_timeout_seconds=30.0,  # Reasonable session timeout
+                                        timeout=20.0,
+                                        sse_read_timeout=300.0,
+                                        client_session_timeout_seconds=90.0,
                                     )
                                     mcp_servers.append(server)
                                     logger.info(f"✅ Added MCP server: {server_config.get('name', server_id)} ({url})")
