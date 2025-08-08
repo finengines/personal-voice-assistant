@@ -139,6 +139,7 @@ class OpenAIToolsServer:
                     tools = await response.json()
                     # Cache tools and save to database
                     for tool in tools:
+                        _init_db, _health_check, db_manager = _lazy_db_stuff()
                         await db_manager.save_tool_info(
                             self.config.id,
                             tool.get('name', ''),
@@ -333,12 +334,14 @@ class MCPServerManager:
                 return False
             
             # Update status in database
+            _init_db, _health_check, db_manager = _lazy_db_stuff()
             await db_manager.update_server_status(server_id, True)
             print(f"Started MCP server: {config.name}")
             return True
             
         except Exception as e:
             print(f"Error starting server {server_id}: {e}")
+            _init_db, _health_check, db_manager = _lazy_db_stuff()
             await db_manager.update_server_status(server_id, False, str(e))
             return False
     
@@ -355,6 +358,7 @@ class MCPServerManager:
             del self.active_servers[server_id]
             
             # Update status in database
+            _init_db, _health_check, db_manager = _lazy_db_stuff()
             await db_manager.update_server_status(server_id, False)
             print(f"Stopped server {server_id}")
             return True
