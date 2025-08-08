@@ -1579,8 +1579,7 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
     """Load MCP servers specified in the preset plus default Graphiti server"""
     mcp_servers = []
     
-    # Always add Graphiti MCP server for memory functionality
-    # Resolve GRAPHITI_MCP_URL with derivation from GRAPHITI_API_URL when needed
+    # Always add Graphiti MCP server for memory functionality (parity with private repo)
     graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "").strip()
     if (not graphiti_mcp_url) or ("your-graphiti-instance.com" in graphiti_mcp_url):
         graphiti_api_url = os.getenv("GRAPHITI_API_URL", "").strip()
