@@ -53,7 +53,7 @@ async def entrypoint(ctx: JobContext):
     # ------------------------------------------------------------------
     from core.dynamic_agent import (
         get_preset_for_room,
-        load_mcp_servers_for_preset,
+        load_mcp_servers_simple,
         create_tts_from_config,
         create_llm_from_config,
         create_stt_from_config,
@@ -77,7 +77,7 @@ async def entrypoint(ctx: JobContext):
     # 3. Load MCP servers
     # ------------------------------------------------------------------
     logger.info(f"🔍 Preset '{preset.name}' has mcp_server_ids: {preset.mcp_server_ids}")
-    mcp_servers = await load_mcp_servers_for_preset(preset.mcp_server_ids)
+    mcp_servers = await load_mcp_servers_simple(preset.mcp_server_ids)
     if mcp_servers:
         logger.info("✅ Loaded %s MCP server(s)", len(mcp_servers))
     else:

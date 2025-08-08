@@ -1481,7 +1481,63 @@ async def load_vad_model(ctx: JobContext):
         # Return a fallback or None
         return None
 
-async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCPServer]:
+async def load_mcp_servers_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServer]:
+    """Load MCP servers using simple pattern matching LiveKit examples"""
+    mcp_servers = []
+    
+    # 1. Always add Graphiti MCP server for memory (like Zapier example pattern)
+    GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "").strip()
+    if GRAPHITI_MCP_URL:
+        logger.info(f"Adding Graphiti MCP server at {GRAPHITI_MCP_URL}")
+        mcp_servers.append(mcp.MCPServerHTTP(url=GRAPHITI_MCP_URL))
+        logger.info(f"✅ Added Graphiti MCP server")
+    else:
+        logger.warning("GRAPHITI_MCP_URL environment variable not set. Memory integration disabled.")
+    
+    # 2. Add additional MCP servers from database (if any)
+    if not mcp_server_ids:
+        logger.info("No additional MCP servers specified in preset")
+        return mcp_servers
+    
+    try:
+        # Simple API call to get server configs
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get('http://localhost:8082/servers') as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get('success'):
+                        servers_data = result['data']
+                        
+                        # Process each requested server ID
+                        for server_id in mcp_server_ids:
+                            # Find server in database
+                            server_config = None
+                            for s in servers_data:
+                                if s['server_id'] == server_id and s['enabled']:
+                                    server_config = s
+                                    break
+                            
+                            if not server_config:
+                                logger.warning(f"MCP server '{server_id}' not found or disabled")
+                                continue
+                            
+                            # Create MCP server (simple pattern like examples)
+                            url = server_config.get('url')
+                            if url:
+                                logger.info(f"Adding MCP server {server_config['name']} at {url}")
+                                mcp_servers.append(mcp.MCPServerHTTP(url=url))
+                                logger.info(f"✅ Added MCP server: {server_config['name']}")
+                            else:
+                                logger.warning(f"No URL for MCP server '{server_id}'")
+                                
+    except Exception as e:
+        logger.warning(f"Could not load MCP servers from database: {e}")
+    
+    logger.info(f"Total MCP servers loaded: {len(mcp_servers)}")
+    return mcp_servers
+
+async def load_mcp_servers_for_preset_simple(mcp_server_ids: List[str]) -> List[mcp.MCPServer]:
     """Load MCP servers specified in the preset plus default Graphiti server"""
     mcp_servers = []
     
@@ -1724,7 +1780,7 @@ async def entrypoint(ctx: JobContext):
         # Load MCP servers based on the preset configuration
         logger.info(f"🔍 Preset '{preset.name}' has mcp_server_ids: {preset.mcp_server_ids}")
         mcp_servers_future = asyncio.create_task(
-            load_mcp_servers_for_preset(preset.mcp_server_ids)
+            load_mcp_servers_simple(preset.mcp_server_ids)
         )
 
         # Create tasks for each component to run in parallel
