@@ -40,8 +40,9 @@ function MainApp() {
 
   // Visual settings
   const [visualSettings, setVisualSettings] = useState({
-    particleSphere: true,
+    visualStyle: 'particles', // 'circle' | 'particles'
     particleDensity: 'medium', // 'low' | 'medium' | 'high'
+    particleColor: '#3a3a3a',
   });
 
   // Audio analyser for particle sphere

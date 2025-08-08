@@ -30,28 +30,47 @@ const SettingsModal = ({ show, onClose, livekitUrl, setLivekitUrl, livekitToken,
           <div className="settings-section">
             {/* Visuals */}
             <div className="input-group">
-              <label>Visual Effects</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input
-                  type="checkbox"
-                  checked={!!visualSettings?.particleSphere}
-                  onChange={(e) => setVisualSettings({ ...visualSettings, particleSphere: e.target.checked })}
-                />
-                Enable Particle Sphere (default)
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                <span style={{ color: '#bbb', fontSize: 13 }}>Density</span>
-                <select
-                  value={visualSettings?.particleDensity || 'medium'}
-                  onChange={(e) => setVisualSettings({ ...visualSettings, particleDensity: e.target.value })}
-                  style={{ background: '#222', color: '#eee', border: '1px solid #444', borderRadius: 8, padding: '6px 10px' }}
+              <label>Visual Style</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className="btn secondary"
+                  style={{ opacity: visualSettings?.visualStyle === 'circle' ? 1 : 0.7 }}
+                  onClick={() => setVisualSettings({ ...visualSettings, visualStyle: 'circle' })}
                 >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
+                  Classic Circle
+                </button>
+                <button
+                  className="btn secondary"
+                  style={{ opacity: visualSettings?.visualStyle !== 'circle' ? 1 : 0.7 }}
+                  onClick={() => setVisualSettings({ ...visualSettings, visualStyle: 'particles' })}
+                >
+                  Particle Sphere
+                </button>
               </div>
-              <p className="input-hint">Audio‑reactive particle sphere inspired by Perplexity. Disable if you prefer minimal UI or have motion sensitivity.</p>
+              {visualSettings?.visualStyle === 'particles' && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                    <span style={{ color: '#bbb', fontSize: 13 }}>Density</span>
+                    <select
+                      value={visualSettings?.particleDensity || 'medium'}
+                      onChange={(e) => setVisualSettings({ ...visualSettings, particleDensity: e.target.value })}
+                      style={{ background: '#222', color: '#eee', border: '1px solid #444', borderRadius: 8, padding: '6px 10px' }}
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                    <span style={{ color: '#bbb', fontSize: 13, marginLeft: 8 }}>Color</span>
+                    <input
+                      type="color"
+                      value={visualSettings?.particleColor || '#3a3a3a'}
+                      onChange={(e) => setVisualSettings({ ...visualSettings, particleColor: e.target.value })}
+                      style={{ background: '#222', border: '1px solid #444', borderRadius: 8, padding: 4 }}
+                    />
+                  </div>
+                  <p className="input-hint">Audio‑reactive sphere with subtle motion. Adjust density/color or switch back to the classic circle.</p>
+                </>
+              )}
             </div>
 
             <div className="input-group">

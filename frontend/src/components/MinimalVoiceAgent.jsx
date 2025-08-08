@@ -92,13 +92,20 @@ const MinimalVoiceAgent = ({
         <div className="voice-visualizer">
           <div className="connection-container">
             {/* Particle sphere background */}
-            {visualSettings.particleSphere && (
+            {visualSettings.visualStyle === 'particles' && (
               <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 1 }}>
-                <AudioParticleSphere enabled analyser={audioAnalyser} density={visualSettings.particleDensity} color={'#3a3a3a'} size={320} />
+                <AudioParticleSphere
+                  enabled
+                  analyser={audioAnalyser}
+                  density={visualSettings.particleDensity}
+                  color={visualSettings.particleColor || '#3a3a3a'}
+                  size={320}
+                  reactToAudioOnly
+                />
               </div>
             )}
             <button
-              className={`primary-btn ${isConnected ? 'connected' : ''} ${isConnecting ? 'connecting' : ''}`}
+              className={`primary-btn ${isConnected ? 'connected' : ''} ${isConnecting ? 'connecting' : ''} ${visualSettings.visualStyle === 'particles' ? 'outline' : ''}`}
               onClick={() => isConnected ? onDisconnect() : onConnect(localSelectedPreset?.id)}
               disabled={isConnecting}
               title={getButtonText()}

@@ -14,11 +14,12 @@ const AudioParticleSphere = ({
   size = 360,
   density = 'medium', // 'low' | 'medium' | 'high'
   color = 'rgba(0,0,0,0.5)',
+  reactToAudioOnly = true, // if true, idle motion is extremely subtle
 }) => {
   const canvasRef = useRef(null);
   const rafRef = useRef(0);
   const pointsRef = useRef([]);
-  const rotationRef = useRef({ x: 0.2, y: 0.1 });
+  const rotationRef = useRef({ x: 0.12, y: 0.06 });
   const energyRef = useRef(0);
 
   // Convert density to number of points
@@ -70,19 +71,22 @@ const AudioParticleSphere = ({
         // Exponential moving average for smoothness
         energyRef.current = energyRef.current * 0.85 + normalized * 0.15;
       } else {
-        // Idle low energy pulsing
-        const t = performance.now() / 2000;
-        energyRef.current = 0.25 + 0.05 * Math.sin(t);
+        // Extremely subtle idle energy when no analyser
+        const t = performance.now() / 3000;
+        energyRef.current = 0.15 + 0.03 * Math.sin(t);
       }
 
-      // Rotation rates influenced by energy
-      rotationRef.current.x += 0.002 + energyRef.current * 0.004;
-      rotationRef.current.y += 0.003 + energyRef.current * 0.005;
+      // Rotation rates influenced primarily by audio energy
+      const idleFactor = reactToAudioOnly ? 0.0004 : 0.0012; // calmer baseline
+      const audioFactorX = reactToAudioOnly ? 0.006 : 0.004;
+      const audioFactorY = reactToAudioOnly ? 0.007 : 0.005;
+      rotationRef.current.x += idleFactor + energyRef.current * audioFactorX;
+      rotationRef.current.y += idleFactor + energyRef.current * audioFactorY;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = color;
 
-      const radius = (pxSize / 2) * (0.80 + energyRef.current * 0.12);
+      const radius = (pxSize / 2) * (0.78 + energyRef.current * 0.10);
       const cx = pxSize / 2;
       const cy = pxSize / 2;
 
@@ -109,8 +113,12 @@ const AudioParticleSphere = ({
         const perspective = 1 / (1.4 - z2); // z in [-1,1] => scale ~ [0.7, inf)
         const screenX = cx + x1 * radius * perspective;
         const screenY = cy + y2 * radius * perspective;
-        const pointSize = Math.max(1, 1.2 * perspective);
-        const alpha = Math.min(0.8, 0.35 + 0.6 * perspective);
+        // Jitter influenced lightly by audio to avoid rigid rotation feel
+        const jitter = (energyRef.current ** 2) * 0.6; // non-linear
+        const screenX = cx + (x1 + (Math.sin(i + rotX) * 0.002 * jitter)) * radius * perspective;
+        const screenY = cy + (y2 + (Math.cos(i + rotY) * 0.002 * jitter)) * radius * perspective;
+        const pointSize = Math.max(1, 1.0 * perspective + energyRef.current * 0.3);
+        const alpha = Math.min(0.75, 0.30 + 0.55 * perspective + energyRef.current * 0.2);
 
         ctx.globalAlpha = alpha;
         ctx.beginPath();
