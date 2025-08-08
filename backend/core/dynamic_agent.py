@@ -102,12 +102,11 @@ class DynamicAgent(Agent):
         except Exception:
             return True
     
-    def __init__(self, preset: AgentPresetConfig, ctx_room=None) -> None:
+    def __init__(self, preset: AgentPresetConfig) -> None:
         # Store preset for async initialization
         self.preset = preset
         self.preset_id = preset.id
         self.preset_name = preset.name
-        self.ctx_room = ctx_room
         
         # Initialize with basic prompt, will be enhanced in on_enter
         super().__init__(
@@ -1926,7 +1925,7 @@ async def entrypoint(ctx: JobContext):
     # ---------------------------------------------------------------------
     # 7. Start the agent with optimized settings
     # ---------------------------------------------------------------------
-    agent = DynamicAgent(preset, ctx_room=ctx.room)
+    agent = DynamicAgent(preset)
     # NOTE: Do NOT manually set the `session` attribute; it is a read-only
     # property provided by the LiveKit `Agent` base class once the agent is
     # started via `session.start()`. Attempting to override it raises an
