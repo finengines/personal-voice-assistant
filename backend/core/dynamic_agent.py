@@ -1654,6 +1654,11 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                 timeout=10.0,  # Reduced timeout
                 sse_read_timeout=60.0,  # Reduced from 120
             )
+            # Ensure server is initialized so tool discovery works reliably
+            try:
+                await graphiti_server.initialize()
+            except Exception as init_e:
+                logger.warning(f"⚠️ Failed to initialize Graphiti MCP server: {init_e}")
             mcp_servers.append(graphiti_server)
             logger.info(f"✅ Added default Graphiti MCP server: {GRAPHITI_MCP_URL}")
             logger.info(f"📊 Total MCP servers after Graphiti addition: {len(mcp_servers)}")
@@ -1688,13 +1693,17 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                     if response.status == 200:
                         api_result = await response.json()
                         if api_result.get('success'):
-                            available_servers = {server['server_id']: {
-                                'name': server['name'],
-                                'server_type': server['server_type'],
-                                'url': server.get('url'),
-                                'enabled': server['enabled'],
-                                'auth': {'type': 'bearer', 'token': 'key'} if server['server_type'] == 'sse' else None
-                            } for server in api_result['data']}
+                            # Do NOT inject auth headers by default. The API doesn't return auth info
+                            # and sending bogus headers can break connections.
+                            available_servers = {
+                                server['server_id']: {
+                                    'name': server['name'],
+                                    'server_type': server['server_type'],
+                                    'url': server.get('url'),
+                                    'enabled': server['enabled'],
+                                }
+                                for server in api_result['data']
+                            }
                             logger.info(f"✅ Loaded {len(available_servers)} servers from API")
                         else:
                             raise Exception(f"API returned error: {api_result.get('message')}")
@@ -1768,6 +1777,11 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                         sse_read_timeout=90.0,  # Reasonable read timeout
                         client_session_timeout_seconds=30.0,  # Reasonable session timeout
                     )
+                    # Initialize so the session can consume tools immediately
+                    try:
+                        await server.initialize()
+                    except Exception as init_e:
+                        logger.warning(f"⚠️ Failed to initialize MCP server '{server_id}': {init_e}")
                     mcp_servers.append(server)
                     logger.info(f"✅ Added MCP server: {server_config.get('name', server_id)} ({url})")
                 except Exception as e:

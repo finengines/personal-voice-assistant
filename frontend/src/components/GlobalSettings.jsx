@@ -28,7 +28,7 @@ const GlobalSettings = () => {
 
   useEffect(() => {
     loadSettings();
-    checkMemoryStatus();
+    // Memory status UI temporarily disabled per product decision
   }, []);
 
   const loadSettings = async () => {
@@ -228,66 +228,7 @@ const GlobalSettings = () => {
         </div>
       </div>
 
-      <div className="memory-status-section">
-        <h3>Memory System Status</h3>
-        <p className="status-description">
-          Monitor the connectivity and health of the agent's memory systems
-        </p>
-        
-        {memoryLoading ? (
-          <div className="status-loading">Checking memory status...</div>
-        ) : memoryStatus ? (
-          <div className="status-grid">
-            <div className={`status-card overall-status ${memoryStatus.overall_status}`}>
-              <h4>Overall Status</h4>
-              <div className="status-indicator">
-                {memoryStatus.overall_status === 'healthy' && <span className="status-icon">✅</span>}
-                {memoryStatus.overall_status === 'degraded' && <span className="status-icon">⚠️</span>}
-                {(memoryStatus.overall_status === 'error' || memoryStatus.overall_status === 'no_servers') && <span className="status-icon">❌</span>}
-                <span className="status-text">{memoryStatus.overall_status}</span>
-              </div>
-            </div>
-            
-            <div className={`status-card ${memoryStatus.graphiti_api?.status === 'connected' ? 'healthy' : 'error'}`}>
-              <h4>Graphiti API</h4>
-              <div className="status-indicator">
-                {memoryStatus.graphiti_api?.status === 'connected' ? '✅' : '❌'}
-                <span className="status-text">{memoryStatus.graphiti_api?.status || 'unknown'}</span>
-              </div>
-              <div className="status-detail">{memoryStatus.graphiti_api?.url}</div>
-            </div>
-            
-            <div className={`status-card ${memoryStatus.graphiti_mcp?.status === 'connected' ? 'healthy' : 'error'}`}>
-              <h4>Graphiti MCP</h4>
-              <div className="status-indicator">
-                {memoryStatus.graphiti_mcp?.status === 'connected' ? '✅' : '❌'}
-                <span className="status-text">{memoryStatus.graphiti_mcp?.status || 'unknown'}</span>
-              </div>
-              <div className="status-detail">{memoryStatus.graphiti_mcp?.url}</div>
-            </div>
-            
-            <div className="status-card">
-              <h4>MCP Servers</h4>
-              <div className="status-indicator">
-                <span className="status-text">{memoryStatus.servers?.length || 0} active</span>
-              </div>
-              <div className="status-detail">{memoryStatus.tools_count || 0} tools available</div>
-            </div>
-          </div>
-        ) : (
-          <div className="status-error">Failed to load memory status</div>
-        )}
-        
-        <div className="status-actions">
-          <button
-            onClick={checkMemoryStatus}
-            disabled={memoryLoading}
-            className="refresh-button"
-          >
-            {memoryLoading ? 'Checking...' : 'Refresh Status'}
-          </button>
-        </div>
-      </div>
+      {/* Memory status UI removed temporarily */}
 
       <div className="preview-section">
         <h3>Prompt Preview</h3>
