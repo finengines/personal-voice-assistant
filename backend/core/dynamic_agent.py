@@ -92,17 +92,8 @@ class DynamicAgent(Agent):
     """Agent that configures itself based on a preset and includes built-in tools with enhanced memory capabilities"""
     
     # Graphiti API configuration
-    # Prefer explicit MCP URL; if missing but API URL is provided, derive MCP as <API>/sse
-    GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "").strip()
-    GRAPHITI_API_URL = os.getenv("GRAPHITI_API_URL", "").strip()
-
-    # Derive MCP URL from API URL when only API is configured
-    if (
-        (not GRAPHITI_MCP_URL or "your-graphiti-instance.com" in GRAPHITI_MCP_URL)
-        and GRAPHITI_API_URL
-        and "your-graphiti-instance.com" not in GRAPHITI_API_URL
-    ):
-        GRAPHITI_MCP_URL = GRAPHITI_API_URL.rstrip("/") + "/sse"
+    GRAPHITI_MCP_URL = "https://graphiti.mcp.finproductions.uk/sse"
+    GRAPHITI_API_URL = "https://graphiti.finproductions.uk"
 
     @staticmethod
     def _is_placeholder_graphiti_url(url: Optional[str]) -> bool:
@@ -1579,41 +1570,19 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
     """Load MCP servers specified in the preset plus default Graphiti server"""
     mcp_servers = []
     
-    # Always add Graphiti MCP server for memory functionality (parity with private repo)
-    graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "").strip()
-    if (not graphiti_mcp_url) or ("your-graphiti-instance.com" in graphiti_mcp_url):
-        graphiti_api_url = os.getenv("GRAPHITI_API_URL", "").strip()
-        if graphiti_api_url and "your-graphiti-instance.com" not in graphiti_api_url:
-            graphiti_mcp_url = graphiti_api_url.rstrip("/") + "/sse"
+    # Always add Graphiti MCP server for memory functionality
+    GRAPHITI_MCP_URL = "https://graphiti.mcp.finproductions.uk/sse"
     try:
-        if (not graphiti_mcp_url) or ("your-graphiti-instance.com" in graphiti_mcp_url):
-            logger.info("ℹ️ Skipping default Graphiti MCP server (not configured)")
-        else:
-            logger.info(f"🔌 Adding default Graphiti MCP server: {graphiti_mcp_url}")
-            graphiti_server = mcp.MCPServerHTTP(
-                url=graphiti_mcp_url, 
-                timeout=30.0,
-                sse_read_timeout=300.0,
-            )
-            # Ensure server is initialized so tool discovery works reliably
-            try:
-                await graphiti_server.initialize()
-            except Exception as init_e:
-                logger.warning(f"⚠️ Failed to initialize Graphiti MCP server: {init_e}")
-            mcp_servers.append(graphiti_server)
-            logger.info(f"✅ Added default Graphiti MCP server: {graphiti_mcp_url}")
-            logger.info(f"📊 Total MCP servers after Graphiti addition: {len(mcp_servers)}")
-            
-            # Best-effort connectivity check without blocking on SSE stream
-            try:
-                import aiohttp
-                async with aiohttp.ClientSession() as _sess:
-                    async with _sess.get(graphiti_mcp_url, headers={"Accept": "text/event-stream"}) as resp:
-                        logger.info(f"🔧 Graphiti MCP probe status: {resp.status}")
-            except Exception as test_e:
-                logger.warning(f"⚠️ Graphiti MCP probe failed: {test_e}")
+        logger.info(f"🔌 Adding default Graphiti MCP server: {GRAPHITI_MCP_URL}")
+        graphiti_server = mcp.MCPServerHTTP(
+            url=GRAPHITI_MCP_URL, 
+            timeout=10.0,  # Reduced timeout
+            sse_read_timeout=60.0,  # Reduced from 120
+        )
+        mcp_servers.append(graphiti_server)
+        logger.info(f"✅ Added default Graphiti MCP server: {GRAPHITI_MCP_URL}")
     except Exception as e:
-        logger.error(f"❌ Failed to add default Graphiti MCP server: {e}", exc_info=True)
+        logger.warning(f"⚠️ Failed to add default Graphiti MCP server: {e}")
     
     try:
         # Load MCP servers from the database manager directly to include auth config
@@ -1673,19 +1642,14 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                     
                     logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
                     
-                    # Create LiveKit MCP server with robust SSE timeouts
+                    # Create LiveKit MCP server with reasonable timeouts
                     server = mcp.MCPServerHTTP(
                         url=url,
                         headers=headers if headers else None,
-                        timeout=30.0,  # Connection timeout
-                        sse_read_timeout=300.0,  # SSE stream can be idle for long periods
-                        client_session_timeout_seconds=120.0,  # Keep client session alive longer
+                        timeout=15.0,  # Reasonable connection timeout
+                        sse_read_timeout=90.0,  # Reasonable read timeout
+                        client_session_timeout_seconds=30.0,  # Reasonable session timeout
                     )
-                    # Initialize; tolerate initial SSE idle/read timeouts
-                    try:
-                        await server.initialize()
-                    except Exception as init_e:
-                        logger.warning(f"⚠️ Initialize warning for MCP server '{server_id}': {init_e}")
                     mcp_servers.append(server)
                     logger.info(f"✅ Added MCP server: {server_config.get('name', server_id)} ({url})")
                 except Exception as e:
