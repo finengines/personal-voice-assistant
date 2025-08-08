@@ -89,8 +89,17 @@ class DynamicAgent(Agent):
     """Agent that configures itself based on a preset and includes built-in tools with enhanced memory capabilities"""
     
     # Graphiti API configuration
-    GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
-    GRAPHITI_API_URL = os.getenv("GRAPHITI_API_URL", "https://your-graphiti-instance.com")
+    # Prefer explicit MCP URL; if missing but API URL is provided, derive MCP as <API>/sse
+    GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "").strip()
+    GRAPHITI_API_URL = os.getenv("GRAPHITI_API_URL", "").strip()
+
+    # Derive MCP URL from API URL when only API is configured
+    if (
+        (not GRAPHITI_MCP_URL or "your-graphiti-instance.com" in GRAPHITI_MCP_URL)
+        and GRAPHITI_API_URL
+        and "your-graphiti-instance.com" not in GRAPHITI_API_URL
+    ):
+        GRAPHITI_MCP_URL = GRAPHITI_API_URL.rstrip("/") + "/sse"
 
     @staticmethod
     def _is_placeholder_graphiti_url(url: Optional[str]) -> bool:
@@ -1661,14 +1670,19 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
     mcp_servers = []
     
     # Always add Graphiti MCP server for memory functionality
-    GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
+    # Resolve GRAPHITI_MCP_URL with derivation from GRAPHITI_API_URL when needed
+    graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "").strip()
+    if (not graphiti_mcp_url) or ("your-graphiti-instance.com" in graphiti_mcp_url):
+        graphiti_api_url = os.getenv("GRAPHITI_API_URL", "").strip()
+        if graphiti_api_url and "your-graphiti-instance.com" not in graphiti_api_url:
+            graphiti_mcp_url = graphiti_api_url.rstrip("/") + "/sse"
     try:
-        if "your-graphiti-instance.com" in GRAPHITI_MCP_URL or not GRAPHITI_MCP_URL.strip():
+        if (not graphiti_mcp_url) or ("your-graphiti-instance.com" in graphiti_mcp_url):
             logger.info("ℹ️ Skipping default Graphiti MCP server (not configured)")
         else:
-            logger.info(f"🔌 Adding default Graphiti MCP server: {GRAPHITI_MCP_URL}")
+            logger.info(f"🔌 Adding default Graphiti MCP server: {graphiti_mcp_url}")
             graphiti_server = mcp.MCPServerHTTP(
-                url=GRAPHITI_MCP_URL, 
+                url=graphiti_mcp_url, 
                 timeout=10.0,  # Reduced timeout
                 sse_read_timeout=60.0,  # Reduced from 120
             )
@@ -1678,7 +1692,7 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
             except Exception as init_e:
                 logger.warning(f"⚠️ Failed to initialize Graphiti MCP server: {init_e}")
             mcp_servers.append(graphiti_server)
-            logger.info(f"✅ Added default Graphiti MCP server: {GRAPHITI_MCP_URL}")
+            logger.info(f"✅ Added default Graphiti MCP server: {graphiti_mcp_url}")
             logger.info(f"📊 Total MCP servers after Graphiti addition: {len(mcp_servers)}")
             
             # Test connectivity

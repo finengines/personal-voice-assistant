@@ -90,6 +90,11 @@ async def lifespan(app: FastAPI):
         # Auto-register Graphiti MCP server from environment if present and not already configured
         try:
             graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "").strip()
+            if (not graphiti_mcp_url) or ("your-graphiti-instance.com" in graphiti_mcp_url):
+                graphiti_api_url = os.getenv("GRAPHITI_API_URL", "").strip()
+                if graphiti_api_url and "your-graphiti-instance.com" not in graphiti_api_url:
+                    graphiti_mcp_url = graphiti_api_url.rstrip("/") + "/sse"
+
             if graphiti_mcp_url and "your-graphiti-instance.com" not in graphiti_mcp_url:
                 # Avoid duplicates
                 existing = mcp_manager.get_server("graphiti-memory")
@@ -112,9 +117,9 @@ async def lifespan(app: FastAPI):
                         print(f"⚠️  Failed to auto-register Graphiti MCP server: {e}")
             else:
                 if not graphiti_mcp_url:
-                    print("ℹ️  GRAPHITI_MCP_URL not set; skipping auto-registration")
+                    print("ℹ️  GRAPHITI_MCP_URL not set (and no usable GRAPHITI_API_URL); skipping auto-registration")
                 else:
-                    print("ℹ️  GRAPHITI_MCP_URL uses placeholder; skipping auto-registration")
+                    print("ℹ️  Graphiti URL uses placeholder; skipping auto-registration")
         except Exception as e:
             print(f"⚠️  Error in Graphiti auto-registration: {e}")
 
@@ -683,7 +688,7 @@ async def memory_status():
         }
         
         # Check Graphiti API
-        graphiti_api_url = os.getenv("GRAPHITI_API_URL", "https://your-graphiti-instance.com")
+        graphiti_api_url = os.getenv("GRAPHITI_API_URL", "").strip() or "https://your-graphiti-instance.com"
         status_data["graphiti_api"]["url"] = graphiti_api_url
         try:
             resp = requests.get(f"{graphiti_api_url.rstrip('/')}/healthcheck", timeout=3)
@@ -694,8 +699,14 @@ async def memory_status():
         except Exception as e:
             status_data["graphiti_api"]["status"] = f"failed_{str(e)[:50]}"
         
-        # Check Graphiti MCP
-        graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "https://your-graphiti-instance.com/sse")
+        # Check Graphiti MCP (derive from API URL when MCP not explicitly set)
+        graphiti_mcp_url = os.getenv("GRAPHITI_MCP_URL", "").strip()
+        if (not graphiti_mcp_url) or ("your-graphiti-instance.com" in graphiti_mcp_url):
+            api_base_for_mcp = os.getenv("GRAPHITI_API_URL", "").strip()
+            if api_base_for_mcp and "your-graphiti-instance.com" not in api_base_for_mcp:
+                graphiti_mcp_url = api_base_for_mcp.rstrip('/') + "/sse"
+            else:
+                graphiti_mcp_url = "https://your-graphiti-instance.com/sse"
         status_data["graphiti_mcp"]["url"] = graphiti_mcp_url
         try:
             # Prefer probing the SSE endpoint directly (should return 200 OK on GET)
