@@ -1485,45 +1485,74 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
     """Load MCP servers specified in the preset plus default Graphiti server"""
     mcp_servers = []
     
-    # Always add Graphiti MCP server for memory functionality
-    GRAPHITI_MCP_URL = "https://graphiti.mcp.finproductions.uk/sse"
-    try:
-        logger.info(f"🔌 Adding default Graphiti MCP server: {GRAPHITI_MCP_URL}")
-        graphiti_server = mcp.MCPServerHTTP(
-            url=GRAPHITI_MCP_URL, 
-            timeout=10.0,  # Reduced timeout
-            sse_read_timeout=60.0,  # Reduced from 120
-        )
-        mcp_servers.append(graphiti_server)
-        logger.info(f"✅ Added default Graphiti MCP server: {GRAPHITI_MCP_URL}")
-    except Exception as e:
-        logger.warning(f"⚠️ Failed to add default Graphiti MCP server: {e}")
+    # Always add Graphiti MCP server for memory functionality using environment variable
+    GRAPHITI_MCP_URL = os.getenv("GRAPHITI_MCP_URL", "").strip()
+    if GRAPHITI_MCP_URL:
+        try:
+            logger.info(f"🔌 Adding Graphiti MCP server: {GRAPHITI_MCP_URL}")
+            graphiti_server = mcp.MCPServerHTTP(
+                url=GRAPHITI_MCP_URL, 
+                timeout=10.0,  # Reduced timeout
+                sse_read_timeout=60.0,  # Reduced from 120
+            )
+            mcp_servers.append(graphiti_server)
+            logger.info(f"✅ Added Graphiti MCP server: {GRAPHITI_MCP_URL}")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to add Graphiti MCP server: {e}")
+    else:
+        logger.warning("⚠️ GRAPHITI_MCP_URL environment variable not set - memory functionality disabled")
     
     if not mcp_server_ids:
         logger.info("ℹ️ No additional MCP servers specified in preset")
         return mcp_servers
     
     try:
-        # Load MCP servers directly from the database manager (ensures auth is included)
-        logger.info("🔄 Loading MCP servers from database manager...")
+        # Load MCP servers from the local API instead of hardcoded JSON
+        logger.info("🔄 Loading MCP servers from local API...")
+        
+        # Try to get servers from local MCP API
         try:
-            from config.mcp_config_db import mcp_manager as db_mcp_manager
-            await db_mcp_manager.initialize()
-            db_servers = db_mcp_manager.list_servers()
-            available_servers = {sid: cfg.to_dict() for sid, cfg in db_servers.items()}
-            logger.info(f"✅ Loaded {len(available_servers)} servers from database")
-        except Exception as db_error:
-            logger.warning(f"⚠️ Database load failed ({db_error}), falling back to JSON config file")
-            # Fallback to local config file  
-            config_path = '/app/config/mcp_servers.json'
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get('http://localhost:8082/servers') as response:
+                    if response.status == 200:
+                        api_result = await response.json()
+                        if api_result.get('success'):
+                            available_servers = {server['server_id']: {
+                                'name': server['name'],
+                                'server_type': server['server_type'],
+                                'url': server.get('url'),
+                                'enabled': server['enabled'],
+                                'auth': {'type': 'bearer', 'token': 'key'} if server['server_type'] == 'sse' else None
+                            } for server in api_result['data']}
+                            logger.info(f"✅ Loaded {len(available_servers)} servers from API")
+                        else:
+                            raise Exception(f"API returned error: {api_result.get('message')}")
+                    else:
+                        raise Exception(f"API returned status {response.status}")
+        except Exception as api_error:
+            logger.warning(f"⚠️ Failed to load from API ({api_error}), trying database fallback")
             try:
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                available_servers = config.get('servers', {})
-                logger.info(f"✅ Loaded {len(available_servers)} servers from JSON config")
-            except FileNotFoundError:
-                logger.warning("⚠️ mcp_servers.json not found, no servers loaded from config")
-                available_servers = {}
+                from config.mcp_config_db import mcp_manager as db_mcp_manager
+                # Ensure DB manager is initialized
+                await db_mcp_manager.initialize()
+                db_servers = db_mcp_manager.list_servers()
+                available_servers = {
+                    sid: cfg.to_dict() for sid, cfg in db_servers.items()
+                }
+                logger.info(f"✅ Loaded {len(available_servers)} servers from database fallback")
+            except Exception as db_error:
+                logger.warning(f"⚠️ Database fallback failed ({db_error}), falling back to config file")
+                # Fallback to local config file  
+                config_path = '/app/config/mcp_servers.json'
+                try:
+                    with open(config_path, 'r') as f:
+                        config = json.load(f)
+                    available_servers = config.get('servers', {})
+                    logger.info(f"✅ Loaded {len(available_servers)} servers from JSON config")
+                except FileNotFoundError:
+                    logger.warning("⚠️ mcp_servers.json not found, no servers loaded from config")
+                    available_servers = {}
         
         logger.info(f"🔍 Looking for MCP servers: {mcp_server_ids}")
         server_names = list(available_servers.keys())
@@ -1547,16 +1576,11 @@ async def load_mcp_servers_for_preset(mcp_server_ids: List[str]) -> List[mcp.MCP
                     continue
                 
                 try:
-                    # Build headers for authentication (bearer/api_key/custom_header)
+                    # Build headers for authentication
                     headers = {}
-                    auth = server_config.get('auth', {}) or {}
-                    auth_type = (auth.get('type') or '').lower()
-                    if auth_type == 'bearer' and auth.get('token'):
+                    auth = server_config.get('auth', {})
+                    if auth and auth.get('type') == 'bearer' and auth.get('token'):
                         headers['Authorization'] = f"Bearer {auth['token']}"
-                    elif auth_type == 'api_key' and auth.get('token'):
-                        headers['X-API-Key'] = auth['token']
-                    elif auth_type == 'custom_header' and auth.get('header_name') and auth.get('header_value'):
-                        headers[auth['header_name']] = auth['header_value']
                     
                     logger.info(f"🔌 Connecting to MCP server '{server_id}': {url}")
                     
@@ -1698,6 +1722,7 @@ async def entrypoint(ctx: JobContext):
     logger.info("Initializing AI components...")
     try:
         # Load MCP servers based on the preset configuration
+        logger.info(f"🔍 Preset '{preset.name}' has mcp_server_ids: {preset.mcp_server_ids}")
         mcp_servers_future = asyncio.create_task(
             load_mcp_servers_for_preset(preset.mcp_server_ids)
         )
