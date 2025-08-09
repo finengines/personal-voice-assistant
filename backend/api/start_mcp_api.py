@@ -33,12 +33,17 @@ def main():
         os.chdir(backend_dir)
         
         # Start the API server
-        subprocess.run([
+        cmd = [
             sys.executable, "-m", "uvicorn", "mcp_api:app", 
             "--host", "0.0.0.0", 
-            "--port", os.environ.get('MCP_API_PORT', '8082'),
-            "--reload" if os.environ.get('DEBUG', 'false').lower() == 'true' else "--no-reload"
-        ], check=True)
+            "--port", os.environ.get('MCP_API_PORT', '8082')
+        ]
+        
+        # Only add reload flag if debug mode is enabled
+        if os.environ.get('DEBUG', 'false').lower() == 'true':
+            cmd.append("--reload")
+            
+        subprocess.run(cmd, check=True)
         
     except KeyboardInterrupt:
         print("\n🛑 MCP API server stopped by user")
