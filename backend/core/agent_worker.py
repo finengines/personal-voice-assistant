@@ -29,6 +29,17 @@ from livekit.agents.voice import MetricsCollectedEvent
 from livekit.plugins import deepgram, openai, silero
 
 load_dotenv()
+
+# Ensure logging is visible in container logs
+_root = logging.getLogger()
+if not _root.handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s:%(name)s:%(message)s",
+    )
+else:
+    _root.setLevel(logging.INFO)
+
 logger = logging.getLogger("agent-worker")
 
 
@@ -127,7 +138,13 @@ async def _build_mcp_servers() -> List[mcp.MCPServer]:
 
 class MinimalAgent(Agent):
     def __init__(self) -> None:
-        super().__init__(instructions="You are a helpful voice assistant. Keep replies concise.")
+        super().__init__(
+            instructions=(
+                "You are a helpful voice assistant. Keep replies concise. "
+                "Use available tools when they help answer the user's question. "
+                "You can also call external MCP tools when appropriate."
+            )
+        )
 
     async def on_enter(self):
         # Don't auto-greet; wait for user. Keep consistent with UI behavior.
@@ -138,6 +155,11 @@ class MinimalAgent(Agent):
         import datetime as _dt
 
         return str(_dt.datetime.utcnow().year)
+
+    @function_tool
+    async def echo(self, text: str) -> str:
+        """Echo back the provided text (for tool-call verification)."""
+        return text
 
     def _publish_event(self, payload: Dict[str, Any]) -> None:
         try:
@@ -169,6 +191,7 @@ class MinimalAgent(Agent):
 
 
 async def entrypoint(ctx: JobContext):
+    logger.info("entrypoint invoked for room placeholder (job will provide actual room)")
     # Attach room in logs
     ctx.log_context_fields = {"room": ctx.room.name}
 
@@ -179,7 +202,9 @@ async def entrypoint(ctx: JobContext):
     tts = openai.TTS(voice="ash")
 
     # Optional MCP servers
+    logger.info("loading MCP servers…")
     mcp_servers = await _build_mcp_servers() or None
+    logger.info("MCP servers loaded: %d", len(mcp_servers) if mcp_servers else 0)
 
     session = AgentSession(
         vad=vad,
@@ -200,6 +225,10 @@ async def entrypoint(ctx: JobContext):
         metrics.log_metrics(ev.metrics)
         usage.collect(ev.metrics)
 
+    @session.on("agent_state_changed")
+    def _on_state(ev):  # pragma: no cover
+        logger.info("agent_state_changed: %s", getattr(ev, "new_state", "unknown"))
+
     # Forward tool execution events to the frontend (if available in current SDK)
     @session.on("function_tools_executed")
     def _on_tools_executed(ev):  # pragma: no cover
@@ -207,12 +236,15 @@ async def entrypoint(ctx: JobContext):
             agent = session.agent
             for fnc_call in getattr(ev, "function_calls", []) or []:
                 name = getattr(fnc_call, "name", "tool")
+                logger.info("tool executed: %s", name)
                 if hasattr(agent, "emit_tool"):
                     agent.emit_tool(name)
         except Exception as e:
             logger.warning("tool event forward failed: %s", e)
 
+    logger.info("connecting to LiveKit room context…")
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+    logger.info("room context connected, starting session…")
     agent = MinimalAgent()
     await session.start(agent=agent, room=ctx.room)
 
@@ -234,7 +266,7 @@ if __name__ == "__main__":
             sys.exit(1)
         sys.exit(0)
 
-    # Normal run
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+    # Normal run (bind worker health server to 8085 to avoid clashes and match healthcheck)
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, port=8085))
 
 
