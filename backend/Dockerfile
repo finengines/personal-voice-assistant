@@ -48,7 +48,7 @@ ENV PYTHONPATH=/app \
 COPY . .
 
 # Pre-download model files during build (optimization for production)
-RUN python core/dynamic_agent.py download-files
+RUN python core/agent_worker.py download-files
 
 # Set proper ownership and permissions
 RUN chown -R appuser:appuser /app && \

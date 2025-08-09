@@ -65,8 +65,8 @@ try:
     time.sleep(2)
     
     # 9. Start LiveKit Agent Worker (this will block)
-    print("🚀 Starting LiveKit Dynamic Agent Worker...")
-    subprocess.call([sys.executable, "core/dynamic_agent.py"])
+    print("🚀 Starting LiveKit Agent Worker (single-agent)...")
+    subprocess.call([sys.executable, "core/agent_worker.py"])
 
 except KeyboardInterrupt:
     print("\n🛑 Interrupted by user")

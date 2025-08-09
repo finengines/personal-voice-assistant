@@ -20,7 +20,7 @@ personal-voice-assistant/
 ├─ backend/
 │  ├─ api/                  # FastAPI routers: auth, MCP, presets, global settings
 │  ├─ core/                 # Agent worker, DB, services
-│  │  ├─ dynamic_agent.py   # LiveKit agent worker (entry point used in dev/prod)
+│  │  ├─ agent_worker.py    # LiveKit single-agent worker (entry point used in dev/prod)
 │  │  └─ init.sql           # DB bootstrap (run by Postgres container)
 │  ├─ requirements/         # Requirements sets (agent/auth/db/mcp)
 │  ├─ utils/simple_token_server.py
