@@ -66,7 +66,8 @@ try:
     
     # 9. Start LiveKit Agent Worker (this will block)
     print("🚀 Starting LiveKit Agent Worker (single-agent)...")
-    subprocess.call([sys.executable, "core/agent_worker.py"])
+    # Use the LiveKit CLI subcommand to prevent immediate exit (which triggers container restarts)
+    subprocess.call([sys.executable, "core/agent_worker.py", "start"]) 
 
 except KeyboardInterrupt:
     print("\n🛑 Interrupted by user")

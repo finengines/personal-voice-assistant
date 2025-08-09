@@ -37,7 +37,36 @@ def _get_env(name: str, default: Optional[str] = None) -> Optional[str]:
     return val if val is not None and str(val).strip() != "" else default
 
 
-def _build_mcp_servers() -> List[mcp.MCPServer]:
+async def _fetch_enabled_servers_from_api() -> Dict[str, Any]:
+    """Fetch MCP servers from the internal MCP API if available.
+
+    Returns a dict keyed by server_id with entries including url, server_type, enabled, and auth.
+    """
+    import aiohttp
+
+    base_url = _get_env("MCP_API_BASE", "http://localhost:8082")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{base_url}/servers") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("success"):
+                        servers = {}
+                        for s in data.get("data", []):
+                            servers[s["server_id"]] = {
+                                "name": s.get("name"),
+                                "server_type": s.get("server_type"),
+                                "url": s.get("url"),
+                                "enabled": s.get("enabled", False),
+                                "auth": s.get("auth") or {},
+                            }
+                        return servers
+    except Exception as e:
+        logger.info("MCP API not available for servers: %s", e)
+    return {}
+
+
+async def _build_mcp_servers() -> List[mcp.MCPServer]:
     """Build a minimal list of MCPServerHTTP from env/DB/API when available.
 
     Supports:
@@ -60,38 +89,37 @@ def _build_mcp_servers() -> List[mcp.MCPServer]:
         except Exception as e:
             logger.warning("Failed to add Graphiti MCP server: %s", e)
 
-    # Optionally add additional servers via JSON file if present
-    # cfg_path = "/app/config/mcp_servers.json"
-    # try:
-    #     if os.path.exists(cfg_path):
-    #         import json
-    #
-    #         with open(cfg_path, "r") as f:
-    #             cfg = json.load(f)
-    #         for sid, s in (cfg.get("servers", {}) or {}).items():
-    #             if not s.get("enabled", False):
-    #                 continue
-    #             url = s.get("url")
-    #             if not url:
-    #                 continue
-    #             headers: Dict[str, str] = {}
-    #             auth = s.get("auth") or {}
-    #             if auth.get("type") == "bearer" and auth.get("token"):
-    #                 headers["Authorization"] = f"Bearer {auth['token']}"
-    #             try:
-    #                 servers.append(
-    #                     mcp.MCPServerHTTP(
-    #                         url=url,
-    #                         headers=headers or None,
-    #                         timeout=float(s.get("timeout", 15.0)),
-    #                         sse_read_timeout=float(s.get("sse_read_timeout", 90.0)),
-    #                     )
-    #                 )
-    #                 logger.info("Added MCP server %s: %s", sid, url)
-    #             except Exception as e:
-    #                 logger.warning("Failed to create MCP server '%s': %s", sid, e)
-    # except Exception as e:
-    #     logger.warning("MCP JSON config load failed: %s", e)
+    # Query internal MCP API for enabled servers to attach
+    try:
+        api_servers = await _fetch_enabled_servers_from_api()
+        for sid, cfg in api_servers.items():
+            if not cfg.get("enabled"):
+                continue
+            if cfg.get("server_type") not in ("sse", "http"):
+                continue
+            url = (cfg.get("url") or "").strip()
+            if not url:
+                continue
+            headers: Dict[str, str] = {}
+            auth = cfg.get("auth") or {}
+            if auth.get("type") == "bearer" and auth.get("token"):
+                headers["Authorization"] = f"Bearer {auth['token']}"
+            elif auth.get("type") == "api_key" and auth.get("token"):
+                headers["X-API-Key"] = auth["token"]
+            try:
+                servers.append(
+                    mcp.MCPServerHTTP(
+                        url=url,
+                        headers=headers or None,
+                        timeout=15.0,
+                        sse_read_timeout=90.0,
+                    )
+                )
+                logger.info("Added MCP server from API %s: %s", sid, url)
+            except Exception as e:
+                logger.warning("Failed to create MCP server '%s': %s", sid, e)
+    except Exception as e:
+        logger.info("MCP API servers unavailable: %s", e)
 
     logger.info("Total MCP servers configured: %d", len(servers))
     return servers
@@ -151,7 +179,7 @@ async def entrypoint(ctx: JobContext):
     tts = openai.TTS(voice="ash")
 
     # Optional MCP servers
-    mcp_servers = _build_mcp_servers() or None
+    mcp_servers = await _build_mcp_servers() or None
 
     session = AgentSession(
         vad=vad,
